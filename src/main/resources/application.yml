@@ -1,13 +1,14 @@
-server:
-  port: 8080
-
+# Mọi key / mật khẩu đọc từ file .env ở thư mục gốc project (copy từ .env.example).
+# Biến môi trường của hệ điều hành vẫn được ưu tiên hơn giá trị trong .env.
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: mael-backend
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/mael}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:12345}
+    password: ${DB_PASSWORD:}
   jpa:
     # Schema tạo bằng script database/01_schema.sql, Hibernate chỉ kiểm tra khớp entity
     hibernate:
@@ -25,24 +26,53 @@ spring:
     time-zone: Asia/Ho_Chi_Minh
     serialization:
       write-dates-as-timestamps: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+server:
+  port: ${SERVER_PORT:8089}
 
 app:
   jwt:
-    # Base64, tối thiểu 256 bit. ĐỔI khi deploy (đặt biến môi trường JWT_SECRET)
-    secret: ${JWT_SECRET:bWFlbC1tdWx0aS1hZ2VudC1lZHRlY2gtbGVhcm5pbmctc2VjcmV0LWtleS0yMDI2LWV4ZTEwMQ==}
-    expiration-ms: 86400000   # 24 giờ
+    # Base64, tối thiểu 256 bit
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
   upload:
     dir: ${UPLOAD_DIR:uploads}
   ai:
     # mock = câu trả lời mẫu. Khi tích hợp OpenAI đổi thành openai và thêm OpenAiOrchestrator
-    provider: mock
+    provider: ${AI_PROVIDER:mock}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    model-chat: ${OPENAI_MODEL_CHAT:gpt-6-luna}
+    model-reasoning: ${OPENAI_MODEL_REASONING:gpt-6.1-sol}
+  google-speech:
+    credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:}
   payment:
     # mock = chưa gọi MoMo. Khi tích hợp đổi thành momo và thêm MomoPaymentGateway
-    provider: mock
+    provider: ${PAYMENT_PROVIDER:mock}
     # Cho phép nút "Giả lập thanh toán thành công" ở FE. TẮT khi lên production
-    mock-confirm-enabled: true
+    mock-confirm-enabled: ${PAYMENT_MOCK_CONFIRM_ENABLED:true}
+  momo:
+    endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+    partner-code: ${MOMO_PARTNER_CODE:}
+    access-key: ${MOMO_ACCESS_KEY:}
+    secret-key: ${MOMO_SECRET_KEY:}
+    redirect-url: ${MOMO_REDIRECT_URL:http://localhost:5173/checkout/result}
+    ipn-url: ${MOMO_IPN_URL:}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
 
 springdoc:
   swagger-ui:

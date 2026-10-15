@@ -20,22 +20,23 @@ psql -U postgres -d mael -f database/01_schema.sql
 psql -U postgres -d mael -f database/02_seed.sql
 ```
 
-### 2. Cấu hình kết nối DB
-Mặc định trong `src/main/resources/application.yml`:
+### 2. Cấu hình `.env`
+Mọi key và mật khẩu nằm trong file `.env` ở thư mục gốc (Spring đọc qua `spring.config.import`, không cần thư viện thêm).
+```bash
+cp .env.example .env
 ```
-url: jdbc:postgresql://localhost:5432/mael
-username: postgres
-password: 12345
-```
-Đổi mật khẩu cho khớp máy bạn, hoặc đặt biến môi trường `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
+Điền `DB_PASSWORD`, `JWT_SECRET` (tạo bằng `openssl rand -base64 48`), sau này thêm `OPENAI_API_KEY`, key MoMo, Cloudinary, Gmail.
+File `.env` đã nằm trong `.gitignore`, chỉ `.env.example` được commit.
+
+Khi chạy trong IntelliJ, để **Working directory** là thư mục gốc project (mặc định đã vậy) thì mới đọc được `.env`.
 
 ### 3. Chạy
 ```bash
 mvn spring-boot:run
 ```
-hoặc trong IntelliJ chạy `MaelApplication`. BE chạy ở http://localhost:8080
+hoặc trong IntelliJ chạy `MaelApplication`. BE chạy ở http://localhost:8089 (đổi bằng `SERVER_PORT` trong `.env`)
 
-- Swagger UI: http://localhost:8080/swagger-ui.html (bấm **Authorize**, dán token lấy từ `/api/auth/login`)
+- Swagger UI: http://localhost:8089/swagger-ui.html (bấm **Authorize**, dán token lấy từ `/api/auth/login`)
 
 ### Tài khoản demo (mật khẩu `123456`)
 | Email | Vai trò |
@@ -78,8 +79,8 @@ src/main/java/com/mael
 | Admin | `POST /api/admin/lessons`, `POST /api/admin/lessons/{id}/submit`, `POST /api/admin/questions`, `POST /api/admin/questions/{id}/submit` |
 
 ## Phần chờ tích hợp
-- **AI (OpenAI)**: tạo class implements `AiOrchestrator` và `PhotoSolver`, đổi `app.ai.provider: openai`. Mock hiện tại cho Tuấn Kiệt cố ý nói sai (lưu `message.has_intended_error`) để test nút "Bạn ấy nói sai!".
-- **MoMo**: tạo class implements `PaymentGateway` (tạo đơn captureWallet, ký HMAC-SHA256), xử lý IPN trong `PaymentController.momoIpn` rồi gọi `paymentService.markSuccess(...)`. Đổi `app.payment.provider: momo` và tắt `app.payment.mock-confirm-enabled`.
+- **AI (OpenAI)**: tạo class implements `AiOrchestrator` và `PhotoSolver`, đổi `AI_PROVIDER=openai` trong `.env`. Mock hiện tại cho Tuấn Kiệt cố ý nói sai (lưu `message.has_intended_error`) để test nút "Bạn ấy nói sai!".
+- **MoMo**: tạo class implements `PaymentGateway` (tạo đơn captureWallet, ký HMAC-SHA256), xử lý IPN trong `PaymentController.momoIpn` rồi gọi `paymentService.markSuccess(...)`. Đổi `PAYMENT_PROVIDER=momo`, `PAYMENT_MOCK_CONFIRM_ENABLED=false` trong `.env`; các key MoMo đọc từ `app.momo.*`.
 - **Cloudinary / SMTP**: thay phần ghi file trong `FileStorageService`; gửi mail ở TODO trong `AdminContentService.submitLessonForReview`.
 
 ## Lưu ý
