@@ -32,6 +32,11 @@ public class Question {
     @JoinColumn(name = "topic_id", nullable = false)
     private Topic topic;
 
+    /** Câu thử thách của một ải (null = câu dùng chung cho chủ đề) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lesson_id")
+    private Lesson lesson;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 

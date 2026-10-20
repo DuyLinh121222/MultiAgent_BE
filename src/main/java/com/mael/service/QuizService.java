@@ -174,7 +174,9 @@ public class QuizService {
      * Cập nhật mức nắm vững: điểm mới = 50% điểm cũ + 50% điểm lần làm này.
      * Chưa có điểm yếu mà làm dưới 80% thì tạo mới.
      */
-    private Weakness updateWeakness(Student student, Topic topic, int correct, int total) {
+    /** Cập nhật mức nắm vững của chủ đề sau mỗi lần làm bài (quiz hoặc thử thách ải) */
+    @Transactional
+    public Weakness updateWeakness(Student student, Topic topic, int correct, int total) {
         BigDecimal pct = BigDecimal.valueOf(correct * 100.0 / total).setScale(2, RoundingMode.HALF_UP);
         Optional<Weakness> existing = weaknessRepository.findByStudentIdAndTopicId(student.getId(), topic.getId());
         if (existing.isEmpty() && pct.compareTo(BigDecimal.valueOf(80)) >= 0) {

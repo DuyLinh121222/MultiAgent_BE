@@ -3,9 +3,13 @@ package com.mael.entity;
 import com.mael.entity.enums.ReviewStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "lesson")
@@ -36,6 +40,12 @@ public class Lesson {
 
     @Column(name = "duration_minutes")
     private Integer durationMinutes;
+
+    /** Lỗi sai hay gặp của bài, bạn AI phản biện chỉ "cố ý sai" trong phạm vi này */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    @Builder.Default
+    private List<Misconception> misconceptions = new ArrayList<>();
 
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;

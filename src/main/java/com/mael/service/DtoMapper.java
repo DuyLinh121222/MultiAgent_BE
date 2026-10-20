@@ -26,8 +26,11 @@ public final class DtoMapper {
     }
 
     public static PlanView toPlanView(SubscriptionPlan p) {
+        List<String> features = p.getFeatures() == null ? List.of()
+                : Arrays.stream(p.getFeatures().split("\\R")).map(String::trim).filter(x -> !x.isEmpty()).toList();
         return new PlanView(p.getId(), p.getName(), p.getDescription(), p.getPrice(),
-                p.getDurationDays(), p.getMaxAiSessions(), isTrial(p));
+                p.getDurationDays(), p.getMaxAiSessions(), isTrial(p), p.getAudience(), p.getPriceUnit(),
+                p.getMinSeats(), features, Boolean.TRUE.equals(p.getFeatured()));
     }
 
     public static boolean isTrial(SubscriptionPlan p) {
@@ -66,6 +69,7 @@ public final class DtoMapper {
                 sa != null ? sa.getRoleInSession() : null,
                 m.getContent(),
                 m.getReplyTo() != null ? m.getReplyTo().getId() : null,
+                m.getQuickReplies() == null ? List.of() : m.getQuickReplies().stream().map(QuickReply::text).toList(),
                 m.getCreatedAt());
     }
 

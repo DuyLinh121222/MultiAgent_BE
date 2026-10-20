@@ -31,7 +31,7 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public List<PlanView> activePlans() {
-        return planRepository.findByActiveTrueOrderByPriceAsc().stream().map(DtoMapper::toPlanView).toList();
+        return planRepository.findByActiveTrueOrderBySortOrderAscPriceAsc().stream().map(DtoMapper::toPlanView).toList();
     }
 
     @Transactional(readOnly = true)
@@ -93,7 +93,7 @@ public class SubscriptionService {
     public Subscription requireActive(Student student) {
         return currentSubscription(student.getId())
                 .orElseThrow(() -> ApiException.paymentRequired(
-                        "Gói học của bạn đã hết hạn. Kích hoạt gói 99.000đ/tháng để tiếp tục học cùng 3 AI."));
+                        "Gói học của bạn đã hết hạn. Kích hoạt gói 99.000đ/tháng để tiếp tục đi ải và học cùng 3 AI."));
     }
 
     /**

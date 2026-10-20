@@ -11,6 +11,8 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
 
     List<SubscriptionPlan> findByActiveTrueOrderByPriceAsc();
 
+    List<SubscriptionPlan> findByActiveTrueOrderBySortOrderAscPriceAsc();
+
     /** Gói dùng thử = gói miễn phí đang hoạt động */
     Optional<SubscriptionPlan> findFirstByActiveTrueAndPrice(BigDecimal price);
 }

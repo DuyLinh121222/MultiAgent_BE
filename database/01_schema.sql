@@ -1,6 +1,6 @@
 -- =====================================================================
 --  MAEL - Multi-Agent Edtech Learning
---  PostgreSQL schema (theo MAEL Logical ERD - 28 bảng, 6 module)
+--  PostgreSQL schema (theo MAEL Logical ERD - 28 bảng, 6 module + 4 bảng game/tổ chức)
 --  Chạy trên database "mael":  psql -U postgres -d mael -f 01_schema.sql
 --  Script chạy lại được nhiều lần (DROP ... CASCADE ở đầu).
 -- =====================================================================
@@ -8,6 +8,9 @@
 -- gen_random_uuid() có sẵn từ PostgreSQL 13. Nếu dùng bản cũ hơn thì bật pgcrypto.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DROP TABLE IF EXISTS org_lead             CASCADE;
+DROP TABLE IF EXISTS stage_result         CASCADE;
+DROP TABLE IF EXISTS student_pet          CASCADE;
 DROP TABLE IF EXISTS content_report       CASCADE;
 DROP TABLE IF EXISTS content_review       CASCADE;
 DROP TABLE IF EXISTS solution             CASCADE;
@@ -36,6 +39,7 @@ DROP TABLE IF EXISTS subscription_plan    CASCADE;
 DROP TABLE IF EXISTS student              CASCADE;
 DROP TABLE IF EXISTS lecturer             CASCADE;
 DROP TABLE IF EXISTS user_account         CASCADE;
+DROP TABLE IF EXISTS pet                  CASCADE;
 
 -- =====================================================================
 --  MODULE A - Tài khoản, Gói & Thanh toán
@@ -72,11 +76,17 @@ CREATE TABLE student (
     grade_level    INT          NOT NULL CHECK (grade_level BETWEEN 6 AND 9),
     date_of_birth  DATE,
     avatar_url     VARCHAR(500),
+    -- Gamification: đã qua màn chào mừng chưa, mục tiêu học, xu, kinh nghiệm, thú đồng hành đang chọn
+    onboarded        BOOLEAN     NOT NULL DEFAULT FALSE,
+    learning_goal    VARCHAR(20) CHECK (learning_goal IN ('EXAM_10', 'FOLLOW_CLASS', 'REBUILD_BASICS')),
+    coins            INT         NOT NULL DEFAULT 0 CHECK (coins >= 0),
+    xp               INT         NOT NULL DEFAULT 0 CHECK (xp >= 0),
+    active_pet_code  VARCHAR(50),
     created_at     TIMESTAMP    NOT NULL DEFAULT now(),
     updated_at     TIMESTAMP    NOT NULL DEFAULT now()
 );
 
--- Gói dịch vụ bán cho học sinh
+-- Gói dịch vụ: cho học sinh (mua qua MoMo) hoặc cho trung tâm / trường học (liên hệ tư vấn)
 CREATE TABLE subscription_plan (
     plan_id          VARCHAR(36)   PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name             VARCHAR(100)  NOT NULL UNIQUE,
@@ -84,6 +94,12 @@ CREATE TABLE subscription_plan (
     price            NUMERIC(12,2) NOT NULL CHECK (price >= 0),
     duration_days    INT           NOT NULL CHECK (duration_days > 0),
     max_ai_sessions  INT,          -- null = không giới hạn
+    audience         VARCHAR(10)   NOT NULL DEFAULT 'STUDENT' CHECK (audience IN ('STUDENT', 'CENTER', 'SCHOOL')),
+    price_unit       VARCHAR(20)   NOT NULL DEFAULT 'PACKAGE' CHECK (price_unit IN ('PACKAGE', 'PER_STUDENT_MONTH')),
+    min_seats        INT           CHECK (min_seats IS NULL OR min_seats > 0),
+    features         TEXT,         -- mỗi dòng là một quyền lợi
+    is_featured      BOOLEAN       NOT NULL DEFAULT FALSE,
+    sort_order       INT           NOT NULL DEFAULT 0,
     is_active        BOOLEAN       NOT NULL DEFAULT TRUE
 );
 
@@ -130,9 +146,35 @@ CREATE TABLE notification (
     created_at       TIMESTAMP    NOT NULL DEFAULT now()
 );
 
+-- Trung tâm / trường học để lại thông tin nhận tư vấn gói tổ chức
+CREATE TABLE org_lead (
+    lead_id        VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    org_type       VARCHAR(10)  NOT NULL CHECK (org_type IN ('CENTER', 'SCHOOL')),
+    org_name       VARCHAR(200) NOT NULL,
+    contact_name   VARCHAR(150) NOT NULL,
+    phone          VARCHAR(20)  NOT NULL,
+    email          VARCHAR(255),
+    student_count  INT          CHECK (student_count IS NULL OR student_count > 0),
+    plan_id        VARCHAR(36)  REFERENCES subscription_plan(plan_id) ON DELETE SET NULL,
+    note           TEXT,
+    status         VARCHAR(20)  NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'CLOSED')),
+    created_at     TIMESTAMP    NOT NULL DEFAULT now()
+);
+
 -- =====================================================================
 --  MODULE B - Nội dung học
 -- =====================================================================
+
+-- Thú đồng hành (vẽ ở FE theo pet_code). price_coins null = chỉ nhận từ rương báu ải trùm
+CREATE TABLE pet (
+    pet_code     VARCHAR(50)  PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    rarity       VARCHAR(10)  NOT NULL CHECK (rarity IN ('COMMON', 'RARE', 'EPIC', 'LEGENDARY')),
+    description  TEXT,
+    price_coins  INT          CHECK (price_coins IS NULL OR price_coins > 0),
+    is_starter   BOOLEAN      NOT NULL DEFAULT FALSE,
+    sort_order   INT          NOT NULL DEFAULT 0
+);
 
 -- Lộ trình học theo khối lớp
 CREATE TABLE learning_path (
@@ -150,6 +192,9 @@ CREATE TABLE topic (
     name         VARCHAR(150) NOT NULL,
     description  TEXT,
     order_index  INT          NOT NULL,
+    semester         INT          NOT NULL DEFAULT 1 CHECK (semester IN (1, 2)),
+    -- Thú nhận được khi phá đảo ải trùm cuối chương
+    reward_pet_code  VARCHAR(50)  REFERENCES pet(pet_code) ON DELETE SET NULL,
     CONSTRAINT uq_topic_path_order UNIQUE (path_id, order_index)
 );
 
@@ -161,6 +206,8 @@ CREATE TABLE lesson (
     content           TEXT,
     video_url         VARCHAR(500),
     duration_minutes  INT,
+    -- Các lỗi sai hay gặp của bài: [{"wrong": "...", "why": "...", "fix": "..."}]. Bạn AI phản biện chỉ được "cố ý sai" trong phạm vi này
+    misconceptions    JSONB,
     order_index       INT          NOT NULL,
     created_by        VARCHAR(36)  NOT NULL REFERENCES user_account(user_id),
     review_status     VARCHAR(20)  NOT NULL DEFAULT 'DRAFT'
@@ -204,6 +251,7 @@ CREATE TABLE lesson_progress (
 CREATE TABLE question (
     question_id     VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     topic_id        VARCHAR(36) NOT NULL REFERENCES topic(topic_id) ON DELETE CASCADE,
+    lesson_id       VARCHAR(36) REFERENCES lesson(lesson_id) ON DELETE SET NULL,  -- câu thử thách của một ải
     content         TEXT        NOT NULL,
     question_type   VARCHAR(20) NOT NULL CHECK (question_type IN ('SINGLE_CHOICE', 'MULTI_CHOICE', 'SHORT_ANSWER')),
     options         JSONB,      -- ["A. ...", "B. ..."]
@@ -289,6 +337,10 @@ CREATE TABLE ai_agent (
     agent_type      VARCHAR(10)  NOT NULL CHECK (agent_type IN ('TUTOR', 'CRITIC')),
     persona_prompt  TEXT,
     model_name      VARCHAR(100),
+    -- Giọng đọc Google Text-to-Speech riêng cho từng AI
+    voice_name      VARCHAR(50),
+    voice_pitch     NUMERIC(4,1) NOT NULL DEFAULT 0,
+    voice_rate      NUMERIC(3,2) NOT NULL DEFAULT 1.00,
     is_active       BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
@@ -323,6 +375,8 @@ CREATE TABLE message (
     sender_type         VARCHAR(10) NOT NULL CHECK (sender_type IN ('STUDENT', 'AGENT')),
     content             TEXT        NOT NULL,
     has_intended_error  BOOLEAN     NOT NULL DEFAULT FALSE,
+    error_note          TEXT,       -- giải thích lỗi sai (chỉ hiện sau khi học sinh bắt được lỗi)
+    quick_replies       JSONB,      -- [{"text": "...", "correct": true, "catchError": false}] để học sinh bấm chọn thay vì gõ
     created_at          TIMESTAMP   NOT NULL DEFAULT now(),
     CHECK ((sender_type = 'STUDENT' AND session_agent_id IS NULL) OR sender_type = 'AGENT')
 );
@@ -347,6 +401,33 @@ CREATE TABLE student_achievement (
     achievement_id          VARCHAR(36) NOT NULL REFERENCES achievement(achievement_id) ON DELETE CASCADE,
     earned_at               TIMESTAMP   NOT NULL DEFAULT now(),
     CONSTRAINT uq_student_achievement UNIQUE (student_id, achievement_id)
+);
+
+-- Thú học sinh đang sở hữu
+CREATE TABLE student_pet (
+    student_pet_id  VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    student_id      VARCHAR(36) NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
+    pet_code        VARCHAR(50) NOT NULL REFERENCES pet(pet_code) ON DELETE CASCADE,
+    source          VARCHAR(10) NOT NULL CHECK (source IN ('STARTER', 'CHEST', 'SHOP')),
+    obtained_at     TIMESTAMP   NOT NULL DEFAULT now(),
+    CONSTRAINT uq_student_pet UNIQUE (student_id, pet_code)
+);
+
+-- Kết quả đi ải: mỗi dòng là 1 ải thường (lesson) hoặc 1 ải trùm cuối chương (topic)
+CREATE TABLE stage_result (
+    stage_result_id   VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    student_id        VARCHAR(36) NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
+    lesson_id         VARCHAR(36) REFERENCES lesson(lesson_id) ON DELETE CASCADE,
+    topic_id          VARCHAR(36) REFERENCES topic(topic_id) ON DELETE CASCADE,
+    stars             INT         NOT NULL DEFAULT 0 CHECK (stars BETWEEN 0 AND 3),
+    best_correct      INT         NOT NULL DEFAULT 0,
+    total_questions   INT         NOT NULL DEFAULT 0,
+    attempts          INT         NOT NULL DEFAULT 0,
+    first_cleared_at  TIMESTAMP,
+    updated_at        TIMESTAMP   NOT NULL DEFAULT now(),
+    CONSTRAINT ck_stage_one_target CHECK (num_nonnulls(lesson_id, topic_id) = 1),
+    CONSTRAINT uq_stage_lesson UNIQUE (student_id, lesson_id),
+    CONSTRAINT uq_stage_topic  UNIQUE (student_id, topic_id)
 );
 
 -- Bài toán học sinh chụp ảnh gửi lên
@@ -419,3 +500,6 @@ CREATE INDEX idx_session_student        ON discussion_session(student_id);
 CREATE INDEX idx_message_session        ON message(session_id, created_at);
 CREATE INDEX idx_photo_student          ON photo_problem(student_id);
 CREATE INDEX idx_report_status          ON content_report(status);
+CREATE INDEX idx_question_lesson        ON question(lesson_id);
+CREATE INDEX idx_stage_student          ON stage_result(student_id);
+CREATE INDEX idx_lead_status            ON org_lead(status, created_at);

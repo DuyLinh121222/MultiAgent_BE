@@ -3,9 +3,12 @@ package com.mael.entity;
 import com.mael.entity.enums.SenderType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Tin nhắn trong phiên thảo luận. Học sinh gửi thì sessionAgent = null.
@@ -47,6 +50,15 @@ public class Message {
     @Column(name = "has_intended_error", nullable = false)
     @Builder.Default
     private Boolean hasIntendedError = false;
+
+    /** Giải thích chỗ sai, chỉ trả cho học sinh sau khi bắt được lỗi */
+    @Column(name = "error_note", columnDefinition = "TEXT")
+    private String errorNote;
+
+    /** Các nút trả lời nhanh để học sinh bấm thay vì gõ */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quick_replies", columnDefinition = "jsonb")
+    private List<QuickReply> quickReplies;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

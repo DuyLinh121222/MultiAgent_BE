@@ -57,6 +57,9 @@ app:
     model-reasoning: ${OPENAI_MODEL_REASONING:gpt-6.1-sol}
   google-speech:
     credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:}
+  google-tts:
+    # API key Google Cloud (bật Cloud Text-to-Speech API). Để trống = FE dùng giọng đọc của trình duyệt
+    api-key: ${GOOGLE_TTS_API_KEY:}
   payment:
     # mock = chưa gọi MoMo. Khi tích hợp đổi thành momo và thêm MomoPaymentGateway
     provider: ${PAYMENT_PROVIDER:mock}

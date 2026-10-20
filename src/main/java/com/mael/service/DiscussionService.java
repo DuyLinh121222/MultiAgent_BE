@@ -88,16 +88,27 @@ public class DiscussionService {
         Message replyTo = req.replyToId() == null ? null : messageRepository.findById(req.replyToId())
                 .filter(m -> m.getSession().getId().equals(sessionId))
                 .orElse(null);
+        // Học sinh bấm nút trả lời nhanh của tin nhắn AI gần nhất?
+        List<Message> before = messageRepository.findBySessionId(sessionId);
+        String content = req.content().trim();
+        QuickReply selected = latestQuickReplies(before).stream()
+                .filter(q -> q.text().equalsIgnoreCase(content))
+                .findFirst().orElse(null);
+
         Message studentMsg = messageRepository.save(Message.builder()
                 .session(session)
                 .senderType(SenderType.STUDENT)
-                .content(req.content().trim())
+                .content(content)
                 .replyTo(replyTo)
                 .createdAt(LocalDateTime.now())
                 .build());
 
+        if (selected != null && Boolean.TRUE.equals(selected.catchError()) && Boolean.TRUE.equals(selected.correct())) {
+            achievementService.award(session.getStudent(), AchievementService.BUG_HUNTER);
+        }
+
         List<Message> history = messageRepository.findBySessionId(sessionId);
-        List<AgentReply> replies = aiOrchestrator.reply(buildContext(session, history), req.content());
+        List<AgentReply> replies = aiOrchestrator.reply(buildContext(session, history), content, selected);
 
         List<MessageView> result = new ArrayList<>();
         result.add(DtoMapper.toMessageView(studentMsg));
@@ -117,10 +128,10 @@ public class DiscussionService {
         if (Boolean.TRUE.equals(m.getHasIntendedError())) {
             boolean unlocked = achievementService.award(session.getStudent(), AchievementService.BUG_HUNTER);
             return new FlagErrorResponse(true,
-                    "Chính xác! Bạn đã phát hiện lập luận sai. Hãy giải thích cho cả nhóm vì sao sai nhé.", unlocked);
+                    "Chính xác! Bạn đã phát hiện lập luận sai.", m.getErrorNote(), unlocked);
         }
         return new FlagErrorResponse(false,
-                "Câu này thực ra đúng đó. Bạn đọc lại thật kỹ hoặc hỏi Thầy AI nhé!", false);
+                "Câu này thực ra đúng đó. Bạn đọc lại thật kỹ hoặc hỏi Thầy AI nhé!", null, false);
     }
 
     @Transactional
@@ -159,6 +170,8 @@ public class DiscussionService {
                     .senderType(SenderType.AGENT)
                     .content(r.content())
                     .hasIntendedError(r.hasIntendedError())
+                    .errorNote(r.errorNote())
+                    .quickReplies(r.quickReplies() == null || r.quickReplies().isEmpty() ? null : r.quickReplies())
                     .replyTo(replyTo)
                     .createdAt(time)
                     .build()));
@@ -175,11 +188,34 @@ public class DiscussionService {
         String studentName = session.getStudent().getFullName();
         List<DiscussionContext.Turn> turns = history.stream()
                 .map(m -> m.getSenderType() == SenderType.STUDENT
-                        ? new DiscussionContext.Turn(studentName, true, m.getContent())
-                        : new DiscussionContext.Turn(m.getSessionAgent().getAgent().getName(), false, m.getContent()))
+                        ? new DiscussionContext.Turn(studentName, true, m.getContent(), false)
+                        : new DiscussionContext.Turn(m.getSessionAgent().getAgent().getName(), false, m.getContent(),
+                        Boolean.TRUE.equals(m.getHasIntendedError())))
                 .toList();
+        int maxRound = history.stream()
+                .filter(m -> m.getQuickReplies() != null)
+                .flatMap(m -> m.getQuickReplies().stream())
+                .map(QuickReply::round)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compare)
+                .orElse(-1);
         return new DiscussionContext(session.getId(), studentName, lesson.getTitle(), lesson.getContent(),
-                lesson.getTopic().getName(), agents, turns);
+                lesson.getTopic().getName(),
+                lesson.getMisconceptions() == null ? List.of() : lesson.getMisconceptions(),
+                agents, turns, latestQuickReplies(history), maxRound);
+    }
+
+    /** Các nút trả lời nhanh của tin nhắn AI gần nhất (nếu tin nhắn cuối cùng của AI có nút) */
+    private static List<QuickReply> latestQuickReplies(List<Message> history) {
+        int i = history.size() - 1;
+        // Bỏ qua tin nhắn học sinh vừa gửi ở cuối
+        while (i >= 0 && history.get(i).getSenderType() == SenderType.STUDENT) i--;
+        for (; i >= 0; i--) {
+            Message m = history.get(i);
+            if (m.getSenderType() == SenderType.STUDENT) return List.of();
+            if (m.getQuickReplies() != null && !m.getQuickReplies().isEmpty()) return m.getQuickReplies();
+        }
+        return List.of();
     }
 
     private SessionView toView(DiscussionSession s) {

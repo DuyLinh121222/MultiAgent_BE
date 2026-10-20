@@ -42,6 +42,7 @@ hoặc trong IntelliJ chạy `MaelApplication`. BE chạy ở http://localhost:8
 | Email | Vai trò |
 |---|---|
 | hocsinh@mael.vn | Học sinh lớp 7, đang dùng thử 7 ngày |
+| lop9@mael.vn | Học sinh lớp 9, đã qua 2 ải đầu Chương I (bản đồ ải Học kỳ 1) |
 | giangvien@mael.vn | Giảng viên duyệt nội dung |
 | admin@mael.vn | Quản trị viên |
 
@@ -85,3 +86,19 @@ src/main/java/com/mael
 
 ## Lưu ý
 - Máy ở VN hay có timezone `Asia/Saigon` mà một số bản PostgreSQL báo lỗi `invalid value for parameter "TimeZone"`. `MaelApplication` đã đặt sẵn `Asia/Ho_Chi_Minh` nên không gặp lỗi này.
+
+## Bản đồ ải (gamification) - Toán 9 Học kỳ 1
+- Mỗi bài học = 1 ải (lý thuyết + 3 câu thử thách), cuối mỗi chương có **ải trùm** 5 câu ngẫu nhiên, thắng mở rương báu (thú hiếm + 50 xu).
+- Sao: đúng hết = 3 sao, >= 2/3 = 2 sao, >= 1/3 = 1 sao (qua ải). Xu: 10 xu / sao mới. XP: 5 / câu đúng, +20 khi qua ải lần đầu, 100 XP lên 1 cấp.
+- Nội dung 5 chương Toán 9 HK1 (SGK Kết nối tri thức, Tập 1) nằm trong `02_seed.sql`: 17 bài, 51 câu hỏi, mỗi bài có `misconceptions` (lỗi sai hay gặp). **Nhờ giảng viên chuyên môn duyệt lại trước khi dùng thật.**
+- API: `/api/game/map`, `/api/game/stages/{lessonId}`, `/api/game/bosses/{topicId}`, `/api/game/pets`, `/api/game/onboarding`.
+- Học sinh mới đăng ký có `onboarded = false`, FE đưa vào màn chào mừng 3 bước (lớp, mục tiêu, thú đồng hành).
+
+## Bạn AI phản biện
+`MockAiOrchestrator` chỉ cho Tuấn Kiệt "cố ý sai" trong danh sách `lesson.misconceptions` của đúng bài đang học (không lạc đề), và gắn các nút trả lời nhanh (`message.quick_replies`) để học sinh bấm chọn thay vì gõ.
+
+## Giọng đọc 3 AI
+Điền `GOOGLE_TTS_API_KEY` (Google Cloud, bật *Cloud Text-to-Speech API*) để mỗi AI đọc bằng một giọng Wavenet riêng (cấu hình ở cột `voice_name`, `voice_pitch`, `voice_rate` của bảng `ai_agent`). Để trống thì FE dùng giọng tiếng Việt của trình duyệt, vẫn khác cao độ / tốc độ cho từng AI.
+
+## Gói học
+`subscription_plan.audience`: `STUDENT` (mua qua MoMo), `CENTER` / `SCHOOL` (giá theo học sinh / tháng, gửi form tư vấn vào bảng `org_lead`, admin xem ở `GET /api/admin/leads`). Trang bảng giá công khai: `http://localhost:5173/plans`.

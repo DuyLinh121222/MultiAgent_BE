@@ -63,7 +63,7 @@ public class AuthService {
                 .build());
         subscriptionService.startTrial(student);
         notificationService.notify(student, NotificationType.SYSTEM, "Chào mừng bạn đến với MAEL!",
-                "Bạn có 7 ngày dùng thử miễn phí. Vào Phòng học nhóm AI để bắt đầu nhé.", null);
+                "Bạn có 7 ngày dùng thử miễn phí. Chọn thú đồng hành rồi bắt đầu Ải 1 trên bản đồ nhé!", null);
 
         UserPrincipal principal = UserPrincipal.from(account);
         return new AuthResponse(jwtService.generateToken(principal), jwtService.getExpirationMs(), buildUserInfo(account));
@@ -94,16 +94,17 @@ public class AuthService {
                         .orElseThrow(() -> ApiException.notFound("Không tìm thấy hồ sơ học sinh"));
                 var sub = subscriptionService.currentSubscription(s.getId()).map(DtoMapper::toSubscriptionView).orElse(null);
                 yield new UserInfo(account.getId(), account.getEmail(), account.getRole(), s.getFullName(),
-                        s.getId(), null, s.getGradeLevel(), s.getAvatarUrl(), sub);
+                        s.getId(), null, s.getGradeLevel(), s.getAvatarUrl(), sub,
+                        Boolean.TRUE.equals(s.getOnboarded()), s.getCoins(), s.getXp(), s.getActivePetCode());
             }
             case LECTURER -> {
                 Lecturer l = lecturerRepository.findByUserId(account.getId())
                         .orElseThrow(() -> ApiException.notFound("Không tìm thấy hồ sơ giảng viên"));
                 yield new UserInfo(account.getId(), account.getEmail(), account.getRole(), l.getFullName(),
-                        null, l.getId(), null, null, null);
+                        null, l.getId(), null, null, null, null, null, null, null);
             }
             case ADMIN -> new UserInfo(account.getId(), account.getEmail(), account.getRole(), "Quản trị viên",
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null);
         };
     }
 }

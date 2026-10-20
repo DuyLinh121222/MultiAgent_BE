@@ -34,6 +34,15 @@ public class Topic {
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;
 
+    /** Học kỳ 1 hoặc 2 */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer semester = 1;
+
+    /** Thú trong rương báu khi phá đảo ải trùm cuối chương (FK tới pet.pet_code) */
+    @Column(name = "reward_pet_code", length = 50)
+    private String rewardPetCode;
+
     @OneToMany(mappedBy = "topic")
     @OrderBy("orderIndex ASC")
     @Builder.Default

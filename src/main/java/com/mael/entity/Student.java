@@ -1,5 +1,6 @@
 package com.mael.entity;
 
+import com.mael.entity.enums.LearningGoal;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
@@ -39,6 +40,28 @@ public class Student {
 
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
+
+    /** Đã qua màn chào mừng 3 bước chưa (học sinh mới đăng ký = false) */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean onboarded = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learning_goal", length = 20)
+    private LearningGoal learningGoal;
+
+    /** Xu nhận được khi qua ải, dùng đổi thú đồng hành */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer coins = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer xp = 0;
+
+    /** Thú đồng hành đang đi cùng trên bản đồ ải */
+    @Column(name = "active_pet_code", length = 50)
+    private String activePetCode;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -6,6 +6,7 @@ import com.mael.entity.Payment;
 import com.mael.entity.Student;
 import com.mael.entity.Subscription;
 import com.mael.entity.SubscriptionPlan;
+import com.mael.entity.enums.PlanAudience;
 import com.mael.entity.enums.NotificationType;
 import com.mael.entity.enums.PaymentStatus;
 import com.mael.entity.enums.SubscriptionStatus;
@@ -49,6 +50,9 @@ public class PaymentService {
         SubscriptionPlan plan = planRepository.findById(req.planId())
                 .filter(SubscriptionPlan::getActive)
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy gói học"));
+        if (plan.getAudience() != PlanAudience.STUDENT) {
+            throw ApiException.badRequest("Gói " + plan.getName() + " dành cho tổ chức. Vui lòng gửi yêu cầu tư vấn để được báo giá.");
+        }
         if (DtoMapper.isTrial(plan)) {
             throw ApiException.badRequest("Gói dùng thử được kích hoạt tự động khi đăng ký");
         }

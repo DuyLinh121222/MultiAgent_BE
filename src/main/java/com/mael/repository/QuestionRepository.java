@@ -12,6 +12,9 @@ public interface QuestionRepository extends JpaRepository<Question, String> {
 
     List<Question> findByTopicIdAndReviewStatus(String topicId, ReviewStatus status);
 
+    /** Câu thử thách của một ải */
+    List<Question> findByLessonIdAndReviewStatusOrderByCreatedAtAsc(String lessonId, ReviewStatus status);
+
     @Query("select q from Question q join fetch q.topic where q.reviewStatus in :statuses order by q.createdAt desc")
     List<Question> findByReviewStatusIn(Collection<ReviewStatus> statuses);
 }
