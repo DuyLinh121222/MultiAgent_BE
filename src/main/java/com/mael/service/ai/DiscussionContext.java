@@ -24,8 +24,18 @@ public record DiscussionContext(
         List<AgentInfo> agents,
         List<Turn> history,
         List<QuickReply> pendingReplies,
-        int maxRound
+        int maxRound,
+        List<PracticeQuestion> practice
 ) {
+    /**
+     * Câu luyện tập đã duyệt của bài (dùng cho lượt "Bảo An nêu công thức, học sinh áp dụng").
+     *
+     * @param options       các lựa chọn đã bỏ chữ cái A/B/C/D ở đầu
+     * @param correctIndex  vị trí đáp án đúng trong options
+     */
+    public record PracticeQuestion(String id, String content, List<String> options, int correctIndex, String explanation) {
+    }
+
     public record AgentInfo(String agentId, String name, AgentType type, String personaPrompt, String modelName) {
     }
 

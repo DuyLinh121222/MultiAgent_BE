@@ -12,6 +12,8 @@ public interface QuestionRepository extends JpaRepository<Question, String> {
 
     List<Question> findByTopicIdAndReviewStatus(String topicId, ReviewStatus status);
 
+    long countByLessonIdAndReviewStatus(String lessonId, ReviewStatus status);
+
     /** Câu thử thách của một ải */
     List<Question> findByLessonIdAndReviewStatusOrderByCreatedAtAsc(String lessonId, ReviewStatus status);
 

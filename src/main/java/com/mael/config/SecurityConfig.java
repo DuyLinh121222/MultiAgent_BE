@@ -47,6 +47,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/plans/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/leads").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/captcha", "/api/blog", "/api/blog/**", "/api/public/**").permitAll()
+                        .requestMatchers("/api/manage/**").hasAnyRole("LECTURER", "ADMIN")
                         // MoMo gọi ngược IPN, không có JWT - được bảo vệ bằng chữ ký
                         .requestMatchers("/api/payments/momo/ipn").permitAll()
                         .requestMatchers("/uploads/**").permitAll()

@@ -22,6 +22,8 @@ public record UserInfo(
         Boolean onboarded,
         Integer coins,
         Integer xp,
-        String activePetCode
+        String activePetCode,
+        Integer energy,
+        Integer streakDays
 ) {
 }

@@ -18,6 +18,44 @@ import java.util.List;
 public class LecturerController {
 
     private final ReviewService reviewService;
+    private final com.mael.service.DocumentService documentService;
+
+    // ---------------- Tài liệu PDF -> AI soạn câu hỏi / mini game ----------------
+
+    @GetMapping("/topics")
+    public List<com.mael.dto.document.TopicOption> topics() {
+        return documentService.topics();
+    }
+
+    @GetMapping("/documents")
+    public List<com.mael.dto.document.DocumentView> documents() {
+        return documentService.myDocuments();
+    }
+
+    @GetMapping("/documents/{id}")
+    public com.mael.dto.document.DocumentView document(@PathVariable String id) {
+        return documentService.get(id);
+    }
+
+    /** Tải PDF: lessonId = gắn vào bài có sẵn; bỏ trống lessonId thì tạo bài mới trong chương topicId */
+    @PostMapping(value = "/documents", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public com.mael.dto.document.DocumentView upload(@RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+                                                     @RequestParam(required = false) String topicId,
+                                                     @RequestParam(required = false) String lessonId,
+                                                     @RequestParam(required = false) String title) {
+        return documentService.upload(file, topicId, lessonId, title);
+    }
+
+    @PostMapping("/documents/{id}/reprocess")
+    public com.mael.dto.document.DocumentView reprocess(@PathVariable String id) {
+        return documentService.reprocess(id);
+    }
+
+    @PostMapping("/documents/{id}/approve-all")
+    public com.mael.dto.document.DocumentView approveAll(@PathVariable String id) {
+        return documentService.approveAll(id);
+    }
 
     @GetMapping("/lessons/pending")
     public List<PendingLessonView> pendingLessons() {

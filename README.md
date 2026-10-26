@@ -102,3 +102,28 @@ src/main/java/com/mael
 
 ## Gói học
 `subscription_plan.audience`: `STUDENT` (mua qua MoMo), `CENTER` / `SCHOOL` (giá theo học sinh / tháng, gửi form tư vấn vào bảng `org_lead`, admin xem ở `GET /api/admin/leads`). Trang bảng giá công khai: `http://localhost:5173/plans`.
+
+## Tích hợp AI Gemini (4 key cho 4 tác vụ)
+Đặt `AI_PROVIDER=gemini` và 4 key trong `.env`:
+
+| Biến | Tác vụ |
+|------|--------|
+| `GEMINI_KEY_DISCUSSION` | 3 AI trả lời khi học sinh tự gõ câu hỏi, tóm tắt buổi thảo luận |
+| `GEMINI_KEY_ANALYSIS` | Phân tích cá nhân hoá (thẻ "Thầy Trí nhận xét" trên bản đồ) |
+| `GEMINI_KEY_DOCUMENT` | Đọc PDF giảng viên tải lên, soạn lý thuyết + lỗi sai hay gặp + câu hỏi cho ải / Đấu trường |
+| `GEMINI_KEY_PHOTO` | Giải toán từ ảnh chụp |
+
+- Model mặc định `gemini-3.1-flash-lite`, không có thì tự dùng `gemini-2.5-flash-lite` (đổi bằng `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
+- Key nào hết lượt (429) thì tự thử key còn lại. Gemini lỗi thì hệ thống dùng kịch bản / luật dự phòng, web không bị đứng.
+- Phần chấm đúng / sai trong phòng thảo luận luôn dựng từ dữ liệu giảng viên đã duyệt (lỗi sai hay gặp + câu luyện tập của bài), AI chỉ trả lời câu hỏi tự do.
+
+## Thể lực, chuỗi ngày, Đấu trường
+- Thể lực tối đa 5, mỗi lần nộp thử thách ải / ải trùm / vào Đấu trường tốn 1, hồi 1 điểm mỗi 30 phút.
+- Chuỗi ngày: ngày nào qua ải hoặc chơi Đấu trường thì +1. Khiên giữ chuỗi (60 xu) tự dùng khi lỡ 1 ngày.
+- Đấu trường: 10 câu ngắn, 2 phút, 3 tim, combo. Xu từ Đấu trường tối đa 40 xu / ngày.
+- 29 huy hiệu có thanh tiến độ (bảng `achievement`, cột `metric` + `target`), mở huy hiệu được thưởng xu.
+
+## Chống spam
+- Form đăng ký và form tư vấn trung tâm / trường học có captcha hình (`GET /api/captcha`), tắt bằng `CAPTCHA_ENABLED=false` khi test Postman.
+- Tư vấn: tối đa 2 yêu cầu / số điện thoại / 24 giờ, 5 yêu cầu / IP / 24 giờ, có ô bẫy bot, chặn link trong ghi chú.
+- Đăng nhập sai 8 lần / 15 phút (theo IP + email) thì khoá tạm. Đăng ký tối đa 5 tài khoản / IP / giờ.

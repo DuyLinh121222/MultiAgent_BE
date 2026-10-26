@@ -36,4 +36,25 @@ public class Achievement {
     @Column(nullable = false)
     @Builder.Default
     private Integer points = 0;
+
+    /** Nhóm hiển thị: LEARN | STREAK | GAME | COLLECT | SOCIAL */
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private String category = "LEARN";
+
+    /** Chỉ số tự tính để mở huy hiệu (xem AchievementService.Metric). null = trao thủ công */
+    @Column(length = 30)
+    private String metric;
+
+    /** Mốc cần đạt của metric */
+    private Integer target;
+
+    /** 1 đồng, 2 bạc, 3 vàng, 4 kim cương */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer tier = 1;
+
+    @Column(name = "sort_order", nullable = false)
+    @Builder.Default
+    private Integer sortOrder = 0;
 }

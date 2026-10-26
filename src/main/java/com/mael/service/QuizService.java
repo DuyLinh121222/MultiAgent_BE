@@ -148,7 +148,7 @@ public class QuizService {
     /**
      * Trắc nghiệm: so chữ cái đáp án (A/B/C/D). Tự luận ngắn: so chuỗi sau khi bỏ khoảng trắng, không phân biệt hoa thường.
      */
-    static boolean isCorrect(Question q, String selected) {
+    public static boolean isCorrect(Question q, String selected) {
         if (selected == null || selected.isBlank()) return false;
         String expected = normalize(q.getCorrectAnswer());
         String actual = normalize(selected);

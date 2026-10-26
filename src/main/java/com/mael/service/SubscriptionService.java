@@ -46,6 +46,29 @@ public class SubscriptionService {
                 .orElse(null);
     }
 
+    /** Lịch sử gói đã kích hoạt (mới nhất trước), bỏ các đơn chưa thanh toán */
+    @Transactional(readOnly = true)
+    public List<SubscriptionView> historyOf(String studentId) {
+        return subscriptionRepository.findByStudentId(studentId).stream()
+                .filter(x -> x.getStatus() != SubscriptionStatus.PENDING && x.getStatus() != SubscriptionStatus.CANCELLED)
+                .sorted(java.util.Comparator.comparing(Subscription::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                .map(DtoMapper::toSubscriptionView).toList();
+    }
+
+    /**
+     * Gói hiển thị: khách xem tất cả (học sinh, trung tâm, trường học);
+     * học sinh đã đăng nhập chỉ thấy gói dành cho học sinh, bỏ gói dùng thử đã dùng.
+     */
+    @Transactional(readOnly = true)
+    public List<PlanView> plansFor(Student student) {
+        if (student == null) return activePlans();
+        boolean usedTrial = subscriptionRepository.existsByStudentIdAndPlanPrice(student.getId(), BigDecimal.ZERO);
+        return planRepository.findByActiveTrueOrderBySortOrderAscPriceAsc().stream()
+                .filter(p -> p.getAudience() == com.mael.entity.enums.PlanAudience.STUDENT)
+                .filter(p -> !(usedTrial && p.getPrice().signum() == 0))
+                .map(DtoMapper::toPlanView).toList();
+    }
+
     @Transactional(readOnly = true)
     public List<SubscriptionView> myHistory() {
         return subscriptionRepository.findByStudentId(currentUser.student().getId()).stream()

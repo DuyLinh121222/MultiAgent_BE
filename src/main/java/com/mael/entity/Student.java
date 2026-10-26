@@ -63,6 +63,31 @@ public class Student {
     @Column(name = "active_pet_code", length = 50)
     private String activePetCode;
 
+    /** Số ngày học liên tiếp (có đi ải hoặc chơi Đấu trường trong ngày) */
+    @Column(name = "streak_days", nullable = false)
+    @Builder.Default
+    private Integer streakDays = 0;
+
+    @Column(name = "best_streak", nullable = false)
+    @Builder.Default
+    private Integer bestStreak = 0;
+
+    @Column(name = "last_active_date")
+    private LocalDate lastActiveDate;
+
+    /** Khiên giữ chuỗi: tự dùng khi lỡ 1 ngày, mua bằng xu (tối đa 3) */
+    @Column(name = "streak_shields", nullable = false)
+    @Builder.Default
+    private Integer streakShields = 0;
+
+    /** Thể lực hiện có tại thời điểm energyUpdatedAt (hồi dần theo thời gian, xem EnergyService) */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer energy = 5;
+
+    @Column(name = "energy_updated_at")
+    private LocalDateTime energyUpdatedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -24,6 +24,9 @@ public record StageResultView(
         String nextStageType,
         String nextStageId,
         String nextStageTitle,
-        GameProfile profile
+        GameProfile profile,
+        List<com.mael.dto.common.AchievementView> newAchievements,
+        int streakDays,
+        boolean streakIncreased
 ) {
 }

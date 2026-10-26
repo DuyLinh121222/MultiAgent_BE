@@ -21,8 +21,8 @@ public class LeadController {
     /** Trung tâm / trường học gửi yêu cầu tư vấn (public) */
     @PostMapping("/leads")
     @ResponseStatus(HttpStatus.CREATED)
-    public LeadView create(@Valid @RequestBody LeadRequest req) {
-        return leadService.create(req);
+    public LeadView create(@Valid @RequestBody LeadRequest req, jakarta.servlet.http.HttpServletRequest http) {
+        return leadService.create(req, com.mael.service.security.ClientIp.of(http));
     }
 
     /** Admin xem danh sách yêu cầu tư vấn */

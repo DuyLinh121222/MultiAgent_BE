@@ -8,6 +8,8 @@
 -- gen_random_uuid() có sẵn từ PostgreSQL 13. Nếu dùng bản cũ hơn thì bật pgcrypto.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DROP TABLE IF EXISTS blog_post            CASCADE;
+DROP TABLE IF EXISTS arena_play           CASCADE;
 DROP TABLE IF EXISTS org_lead             CASCADE;
 DROP TABLE IF EXISTS stage_result         CASCADE;
 DROP TABLE IF EXISTS student_pet          CASCADE;
@@ -82,6 +84,14 @@ CREATE TABLE student (
     coins            INT         NOT NULL DEFAULT 0 CHECK (coins >= 0),
     xp               INT         NOT NULL DEFAULT 0 CHECK (xp >= 0),
     active_pet_code  VARCHAR(50),
+    -- Chuỗi ngày học: số ngày liên tiếp có đi ải / chơi game, kỷ lục, ngày học gần nhất, khiên giữ chuỗi
+    streak_days       INT         NOT NULL DEFAULT 0 CHECK (streak_days >= 0),
+    best_streak       INT         NOT NULL DEFAULT 0 CHECK (best_streak >= 0),
+    last_active_date  DATE,
+    streak_shields    INT         NOT NULL DEFAULT 0 CHECK (streak_shields BETWEEN 0 AND 3),
+    -- Thanh thể lực: mỗi lượt chơi tốn 1, tự hồi 1 điểm mỗi 30 phút (tránh cày liên tục)
+    energy            INT         NOT NULL DEFAULT 5 CHECK (energy >= 0),
+    energy_updated_at TIMESTAMP,
     created_at     TIMESTAMP    NOT NULL DEFAULT now(),
     updated_at     TIMESTAMP    NOT NULL DEFAULT now()
 );
@@ -157,8 +167,27 @@ CREATE TABLE org_lead (
     student_count  INT          CHECK (student_count IS NULL OR student_count > 0),
     plan_id        VARCHAR(36)  REFERENCES subscription_plan(plan_id) ON DELETE SET NULL,
     note           TEXT,
+    ip_address     VARCHAR(64),
     status         VARCHAR(20)  NOT NULL DEFAULT 'NEW' CHECK (status IN ('NEW', 'CONTACTED', 'CLOSED')),
     created_at     TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+-- Bài viết / tin tức hiện trên banner trang chủ cho khách (admin, giảng viên đăng)
+CREATE TABLE blog_post (
+    post_id       VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    title         VARCHAR(200) NOT NULL,
+    summary       VARCHAR(500),
+    content       TEXT         NOT NULL,
+    cover_url     VARCHAR(1000),
+    -- Màu banner khi không có ảnh bìa: BLUE | ORANGE | GREEN | PURPLE | PINK
+    theme         VARCHAR(10)  NOT NULL DEFAULT 'BLUE',
+    tag           VARCHAR(50),
+    is_published  BOOLEAN      NOT NULL DEFAULT TRUE,
+    is_pinned     BOOLEAN      NOT NULL DEFAULT FALSE,
+    author_id     VARCHAR(36)  REFERENCES user_account(user_id) ON DELETE SET NULL,
+    author_name   VARCHAR(150),
+    created_at    TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT now()
 );
 
 -- =====================================================================
@@ -227,6 +256,10 @@ CREATE TABLE lesson_material (
     file_url     VARCHAR(1000) NOT NULL,
     file_type    VARCHAR(20)  NOT NULL CHECK (file_type IN ('PDF', 'IMAGE', 'VIDEO')),
     file_size    BIGINT,
+    -- Giảng viên tải PDF lên, AI đọc và soạn câu hỏi / mini game (chờ giảng viên duyệt)
+    uploaded_by  VARCHAR(36)  REFERENCES lecturer(lecturer_id) ON DELETE SET NULL,
+    ai_status    VARCHAR(20)  NOT NULL DEFAULT 'NONE' CHECK (ai_status IN ('NONE', 'PROCESSING', 'DONE', 'FAILED')),
+    ai_note      TEXT,
     uploaded_at  TIMESTAMP    NOT NULL DEFAULT now()
 );
 
@@ -390,9 +423,17 @@ CREATE TABLE achievement (
     code            VARCHAR(50)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
     description     TEXT,
-    icon_url        VARCHAR(500),
+    icon_url        VARCHAR(500),  -- tên icon Material Symbols, ví dụ local_fire_department
     criteria        TEXT,
-    points          INT          NOT NULL DEFAULT 0
+    points          INT          NOT NULL DEFAULT 0,
+    -- Nhóm hiển thị: LEARN | STREAK | GAME | COLLECT | SOCIAL
+    category        VARCHAR(20)  NOT NULL DEFAULT 'LEARN',
+    -- Chỉ số tự động tính để mở huy hiệu (null = trao thủ công trong code) và mốc cần đạt
+    metric          VARCHAR(30),
+    target          INT,
+    -- Hạng huy hiệu: 1 đồng, 2 bạc, 3 vàng, 4 kim cương
+    tier            INT          NOT NULL DEFAULT 1,
+    sort_order      INT          NOT NULL DEFAULT 0
 );
 
 CREATE TABLE student_achievement (
@@ -428,6 +469,19 @@ CREATE TABLE stage_result (
     CONSTRAINT ck_stage_one_target CHECK (num_nonnulls(lesson_id, topic_id) = 1),
     CONSTRAINT uq_stage_lesson UNIQUE (student_id, lesson_id),
     CONSTRAINT uq_stage_topic  UNIQUE (student_id, topic_id)
+);
+
+-- Mỗi lượt chơi mini game Đấu trường (câu hỏi lấy từ ngân hàng đã duyệt, gồm câu AI soạn từ PDF giảng viên)
+CREATE TABLE arena_play (
+    play_id       VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    student_id    VARCHAR(36) NOT NULL REFERENCES student(student_id) ON DELETE CASCADE,
+    topic_id      VARCHAR(36) NOT NULL REFERENCES topic(topic_id) ON DELETE CASCADE,
+    correct       INT         NOT NULL DEFAULT 0,
+    total         INT         NOT NULL DEFAULT 0,
+    best_combo    INT         NOT NULL DEFAULT 0,
+    score         INT         NOT NULL DEFAULT 0,
+    coins_earned  INT         NOT NULL DEFAULT 0,
+    played_at     TIMESTAMP   NOT NULL DEFAULT now()
 );
 
 -- Bài toán học sinh chụp ảnh gửi lên
@@ -503,3 +557,7 @@ CREATE INDEX idx_report_status          ON content_report(status);
 CREATE INDEX idx_question_lesson        ON question(lesson_id);
 CREATE INDEX idx_stage_student          ON stage_result(student_id);
 CREATE INDEX idx_lead_status            ON org_lead(status, created_at);
+CREATE INDEX idx_lead_phone             ON org_lead(phone, created_at);
+CREATE INDEX idx_arena_student          ON arena_play(student_id, played_at);
+CREATE INDEX idx_blog_published         ON blog_post(is_published, created_at);
+CREATE INDEX idx_material_lesson        ON lesson_material(lesson_id);

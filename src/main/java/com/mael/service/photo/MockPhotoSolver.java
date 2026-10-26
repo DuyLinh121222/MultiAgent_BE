@@ -1,7 +1,6 @@
 package com.mael.service.photo;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -9,8 +8,7 @@ import java.util.List;
 /**
  * Lời giải mẫu để chạy thử luồng upload ảnh khi chưa tích hợp AI.
  */
-@Service
-@ConditionalOnProperty(name = "app.ai.provider", havingValue = "mock", matchIfMissing = true)
+@Component
 public class MockPhotoSolver implements PhotoSolver {
 
     @Override

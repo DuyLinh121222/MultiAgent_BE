@@ -51,6 +51,10 @@ public class OrgLead {
     @Column(columnDefinition = "TEXT")
     private String note;
 
+    /** IP gửi yêu cầu (chống spam) */
+    @Column(name = "ip_address", length = 64)
+    private String ipAddress;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

@@ -13,4 +13,6 @@ public interface DiscussionSessionRepository extends JpaRepository<DiscussionSes
     List<DiscussionSession> findByStudentId(String studentId);
 
     long countByStudentIdAndStartedAtAfter(String studentId, LocalDateTime after);
+
+    long countByStudentId(String studentId);
 }

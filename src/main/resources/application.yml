@@ -20,8 +20,8 @@ spring:
         jdbc.time_zone: Asia/Ho_Chi_Minh
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+      max-file-size: 15MB
+      max-request-size: 16MB
   jackson:
     time-zone: Asia/Ho_Chi_Minh
     serialization:
@@ -47,9 +47,33 @@ app:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
   upload:
     dir: ${UPLOAD_DIR:uploads}
+  site:
+    # Thông tin liên hệ hiện ở trang chủ
+    phone: ${SITE_PHONE:0342764001}
+    email: ${SITE_EMAIL:tduyminh0112@gmail.com}
+  security:
+    # Bật captcha cho form đăng ký và form tư vấn trung tâm / trường học
+    captcha-enabled: ${CAPTCHA_ENABLED:true}
+    # Mỗi số điện thoại / IP gửi tối đa bao nhiêu yêu cầu tư vấn trong 24 giờ
+    lead-max-per-phone-per-day: ${LEAD_MAX_PER_PHONE:2}
+    lead-max-per-ip-per-day: ${LEAD_MAX_PER_IP:5}
+    # Số lần đăng nhập sai tối đa trong 15 phút cho 1 IP + email
+    login-max-fail: ${LOGIN_MAX_FAIL:8}
   ai:
-    # mock = câu trả lời mẫu. Khi tích hợp OpenAI đổi thành openai và thêm OpenAiOrchestrator
+    # gemini = gọi Gemini API bằng 4 key bên dưới. mock = chỉ dùng kịch bản soạn sẵn (không gọi AI)
     provider: ${AI_PROVIDER:mock}
+  gemini:
+    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+    # Model rẻ, nhanh. Model chính không có (404) thì tự dùng model dự phòng
+    model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
+    fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-2.5-flash-lite}
+    timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}
+    # Mỗi tác vụ 1 key riêng. Key nào hết lượt (429) thì tự thử key còn lại
+    keys:
+      discussion: ${GEMINI_KEY_DISCUSSION:}
+      analysis: ${GEMINI_KEY_ANALYSIS:}
+      document: ${GEMINI_KEY_DOCUMENT:}
+      photo: ${GEMINI_KEY_PHOTO:}
   openai:
     api-key: ${OPENAI_API_KEY:}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}

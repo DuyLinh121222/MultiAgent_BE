@@ -20,13 +20,13 @@ public class AuthController {
     /** Học sinh đăng ký, tự động có 7 ngày dùng thử */
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
-        return authService.register(req);
+    public AuthResponse register(@Valid @RequestBody RegisterRequest req, jakarta.servlet.http.HttpServletRequest http) {
+        return authService.register(req, com.mael.service.security.ClientIp.of(http));
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest req) {
-        return authService.login(req);
+    public AuthResponse login(@Valid @RequestBody LoginRequest req, jakarta.servlet.http.HttpServletRequest http) {
+        return authService.login(req, com.mael.service.security.ClientIp.of(http));
     }
 
     @GetMapping("/me")

@@ -37,9 +37,9 @@ INSERT INTO pet (pet_code, name, rarity, description, price_coins, is_starter, s
  ('chim-canh-cut', 'Chim Cánh Cụt', 'RARE',  'Bình tĩnh giữa băng giá, giải đề không hoảng.',               300, FALSE, 9),
  ('ky-lan',    'Kỳ Lân Sao',    'LEGENDARY', 'Chỉ dành cho nhà vô địch tích đủ 800 xu.',                     800, FALSE, 10);
 
-INSERT INTO student (student_id, user_id, full_name, phone, grade_level, date_of_birth, onboarded, learning_goal, coins, xp, active_pet_code) VALUES
- ('stu-1', 'u-student',  'Minh Quân', '0901234567', 7, '2014-05-20', TRUE, 'FOLLOW_CLASS', 40, 120, 'cun-vang'),
- ('stu-9', 'u-student9', 'Minh Anh',  '0907654321', 9, '2011-09-02', TRUE, 'EXAM_10',      50, 60,  'meo-mun');
+INSERT INTO student (student_id, user_id, full_name, phone, grade_level, date_of_birth, onboarded, learning_goal, coins, xp, active_pet_code, streak_days, best_streak, last_active_date, streak_shields, energy, energy_updated_at) VALUES
+ ('stu-1', 'u-student',  'Minh Quân', '0901234567', 7, '2014-05-20', TRUE, 'FOLLOW_CLASS', 40, 120, 'cun-vang', 0, 2, CURRENT_DATE - 5, 0, 5, now()),
+ ('stu-9', 'u-student9', 'Minh Anh',  '0907654321', 9, '2011-09-02', TRUE, 'EXAM_10',      50, 60,  'meo-mun',  2, 2, CURRENT_DATE - 1, 1, 5, now());
 
 INSERT INTO student_pet (student_id, pet_code, source) VALUES
  ('stu-1', 'cun-vang', 'STARTER'),
@@ -379,25 +379,72 @@ INSERT INTO quiz_question (quiz_id, question_id, order_index, points) VALUES
 INSERT INTO ai_agent (agent_id, name, agent_type, persona_prompt, model_name, voice_name, voice_pitch, voice_rate, is_active) VALUES
  ('agent-tutor', 'Thầy Minh Trí', 'TUTOR',
   'Bạn là Thầy Minh Trí, giáo viên Toán THCS thân thiện. Giảng giải ngắn gọn, từng bước, CHỈ dựa trên nội dung bài giảng đã được duyệt. Không giải hộ ngay, hãy gợi mở để học sinh tự làm. Mỗi lượt kết thúc bằng một câu hỏi và 2-4 lựa chọn trả lời ngắn để học sinh bấm chọn.',
-  'gpt-6-luna', 'vi-VN-Wavenet-D', -2.0, 0.95, TRUE),
+  'gemini-3.1-flash-lite', 'vi-VN-Wavenet-D', -2.0, 0.95, TRUE),
  ('agent-critic', 'Tuấn Kiệt', 'CRITIC',
   'Bạn là Tuấn Kiệt, bạn học hay phản biện. Thỉnh thoảng cố ý đưa ra MỘT lập luận sai để học sinh phát hiện. Lỗi sai BẮT BUỘC thuộc đúng kiến thức của bài đang học (ưu tiên chọn trong danh sách misconceptions của bài), tuyệt đối không nói sang chủ đề khác. Trả về JSON có cờ has_intended_error và error_note giải thích chỗ sai.',
-  'gpt-6-luna', 'vi-VN-Wavenet-B', 3.5, 1.10, TRUE),
+  'gemini-3.1-flash-lite', 'vi-VN-Wavenet-B', 3.5, 1.10, TRUE),
  ('agent-creative', 'Bảo An', 'CRITIC',
   'Bạn là Bảo An, bạn học nhanh nhạy, hay tìm cách giải khác và soát lỗi lập luận của các bạn. Chỉ bàn về kiến thức của bài đang học.',
-  'gpt-6-luna', 'vi-VN-Wavenet-C', 2.0, 1.05, TRUE);
+  'gemini-3.1-flash-lite', 'vi-VN-Wavenet-C', 2.0, 1.05, TRUE);
 
 -- ---------------------------------------------------------------------
 -- Module E: thành tích
 -- ---------------------------------------------------------------------
-INSERT INTO achievement (achievement_id, code, name, description, criteria, points) VALUES
- ('ach-1', 'FIRST_LESSON',   'Bước chân đầu tiên', 'Hoàn thành bài học đầu tiên',            'Hoàn thành 1 bài học',               10),
- ('ach-2', 'BUG_HUNTER',     'Thám tử bắt lỗi',     'Phát hiện lập luận sai của bạn AI',      'Chỉ ra 1 câu phản biện cố ý sai',    20),
- ('ach-3', 'QUIZ_MASTER',    'Cao thủ quiz',        'Đạt điểm tuyệt đối một bài quiz',        'Đạt 100% một bài quiz',              30),
- ('ach-4', 'PHOTO_SOLVER',   'Nhà giải ảnh',        'Gửi bài toán đầu tiên bằng ảnh',         'Gửi 1 ảnh bài toán',                 10),
- ('ach-5', 'STREAK_7',       'Chuỗi 7 ngày',        'Học liên tục 7 ngày',                    'Đăng nhập học 7 ngày liên tiếp',     50);
+-- metric + target: tự mở khi chỉ số đạt mốc (xem AchievementService.Metric). metric NULL = trao thủ công trong code.
+-- Mở huy hiệu được thưởng số xu = points. icon_url = tên icon Material Symbols. tier: 1 đồng, 2 bạc, 3 vàng, 4 kim cương
+INSERT INTO achievement (achievement_id, code, name, description, icon_url, criteria, points, category, metric, target, tier, sort_order) VALUES
+ ('ach-1',  'FIRST_LESSON', 'Bước chân đầu tiên', 'Qua ải đầu tiên trên bản đồ',              'directions_walk',       'Qua 1 ải',                    10, 'LEARN',   'STAGES',      1,  1, 1),
+ ('ach-6',  'STAGES_5',     'Nhà thám hiểm',      'Qua 5 ải trên bản đồ',                      'explore',               'Qua 5 ải',                    20, 'LEARN',   'STAGES',      5,  2, 2),
+ ('ach-7',  'STAGES_12',    'Lữ khách bền bỉ',    'Qua 12 ải trên bản đồ',                     'hiking',                'Qua 12 ải',                   40, 'LEARN',   'STAGES',      12, 3, 3),
+ ('ach-8',  'STARS_10',     'Nhặt sao',           'Gom đủ 10 ngôi sao',                        'star',                  'Đạt 10 sao',                  15, 'LEARN',   'STARS',       10, 1, 4),
+ ('ach-9',  'STARS_30',     'Chòm sao nhỏ',       'Gom đủ 30 ngôi sao',                        'auto_awesome',          'Đạt 30 sao',                  30, 'LEARN',   'STARS',       30, 2, 5),
+ ('ach-10', 'STARS_60',     'Dải ngân hà',        'Gom đủ 60 ngôi sao',                        'stars',                 'Đạt 60 sao',                  60, 'LEARN',   'STARS',       60, 4, 6),
+ ('ach-11', 'PERFECT_1',    'Hoàn hảo',           'Đạt 3 sao ở một ải',                        'workspace_premium',     '1 ải 3 sao',                  10, 'LEARN',   'PERFECT',     1,  1, 7),
+ ('ach-12', 'PERFECT_5',    'Không tì vết',       'Đạt 3 sao ở 5 ải',                          'verified',              '5 ải 3 sao',                  30, 'LEARN',   'PERFECT',     5,  2, 8),
+ ('ach-13', 'PERFECT_12',   'Bậc thầy chính xác', 'Đạt 3 sao ở 12 ải',                         'diamond',               '12 ải 3 sao',                 60, 'LEARN',   'PERFECT',     12, 4, 9),
+ ('ach-14', 'FIRST_BOSS',   'Hạ gục trùm',        'Thắng ải trùm đầu tiên',                    'swords',                'Thắng 1 ải trùm',             25, 'LEARN',   'BOSSES',      1,  2, 10),
+ ('ach-15', 'BOSS_3',       'Thợ săn trùm',       'Thắng 3 ải trùm',                           'shield',                'Thắng 3 ải trùm',             40, 'LEARN',   'BOSSES',      3,  3, 11),
+ ('ach-16', 'ALL_BOSS',     'Bá chủ học kỳ I',    'Thắng cả 5 ải trùm của học kỳ',             'castle',                'Thắng 5 ải trùm',             100,'LEARN',   'BOSSES',      5,  4, 12),
+ ('ach-17', 'STREAK_3',     'Khởi động',          'Học 3 ngày liên tiếp',                      'local_fire_department', 'Chuỗi 3 ngày',                15, 'STREAK',  'STREAK',      3,  1, 20),
+ ('ach-5',  'STREAK_7',     'Chuỗi 7 ngày',       'Học liên tục 7 ngày',                       'local_fire_department', 'Chuỗi 7 ngày',                40, 'STREAK',  'STREAK',      7,  2, 21),
+ ('ach-18', 'STREAK_14',    'Ngọn lửa bền bỉ',    'Học liên tục 14 ngày',                      'whatshot',              'Chuỗi 14 ngày',               60, 'STREAK',  'STREAK',      14, 3, 22),
+ ('ach-19', 'STREAK_30',    'Lửa không tắt',      'Học liên tục 30 ngày',                      'mode_heat',             'Chuỗi 30 ngày',               120,'STREAK',  'STREAK',      30, 4, 23),
+ ('ach-20', 'ARENA_FIRST',  'Võ sĩ tập sự',       'Chơi Đấu trường lần đầu',                   'sports_esports',        'Chơi 1 lượt Đấu trường',      10, 'GAME',    'ARENA_PLAYS', 1,  1, 30),
+ ('ach-21', 'ARENA_10',     'Chiến binh',         'Chơi 10 lượt Đấu trường',                   'sports_martial_arts',   'Chơi 10 lượt Đấu trường',     30, 'GAME',    'ARENA_PLAYS', 10, 2, 31),
+ ('ach-22', 'COMBO_5',      'Combo x5',           'Trả lời đúng 5 câu liên tiếp ở Đấu trường', 'bolt',                  'Combo 5',                     20, 'GAME',    'ARENA_COMBO', 5,  2, 32),
+ ('ach-23', 'COMBO_10',     'Combo hoàn hảo',     'Đúng liền 10 câu ở Đấu trường',             'electric_bolt',         'Combo 10',                    50, 'GAME',    'ARENA_COMBO', 10, 4, 33),
+ ('ach-24', 'PET_3',        'Bạn thú nhỏ',        'Sở hữu 3 thú đồng hành',                    'pets',                  'Có 3 thú',                    20, 'COLLECT', 'PETS',        3,  2, 40),
+ ('ach-25', 'PET_6',        'Vườn thú mini',      'Sở hữu 6 thú đồng hành',                    'cruelty_free',          'Có 6 thú',                    50, 'COLLECT', 'PETS',        6,  3, 41),
+ ('ach-26', 'LEVEL_5',      'Lên cấp 5',          'Đạt cấp 5',                                 'trending_up',           'Cấp 5',                       25, 'COLLECT', 'LEVEL',       5,  2, 42),
+ ('ach-27', 'LEVEL_10',     'Cao thủ cấp 10',     'Đạt cấp 10',                                'military_tech',         'Cấp 10',                      60, 'COLLECT', 'LEVEL',       10, 4, 43),
+ ('ach-28', 'RICH_300',     'Tiểu phú ông',       'Cùng lúc có 300 xu',                        'savings',               'Có 300 xu',                   20, 'COLLECT', 'COINS',       300,2, 44),
+ ('ach-2',  'BUG_HUNTER',   'Thám tử bắt lỗi',    'Phát hiện lập luận sai của bạn AI',         'manage_search',         'Bắt được 1 lỗi sai của bạn AI',20, 'SOCIAL',  NULL,          NULL,2, 50),
+ ('ach-29', 'DISCUSS_5',    'Nhà tranh luận',     'Tham gia 5 buổi thảo luận cùng 3 AI',       'forum',                 '5 buổi thảo luận',            25, 'SOCIAL',  'DISCUSSIONS', 5,  2, 51),
+ ('ach-3',  'QUIZ_MASTER',  'Cao thủ quiz',       'Đạt điểm tuyệt đối một bài quiz',           'emoji_events',          'Đạt 100% một bài quiz',       30, 'SOCIAL',  NULL,          NULL,3, 52),
+ ('ach-4',  'PHOTO_SOLVER', 'Nhà giải ảnh',       'Gửi bài toán đầu tiên bằng ảnh',            'photo_camera',          'Gửi 1 ảnh bài toán',          10, 'SOCIAL',  NULL,          NULL,1, 53);
 
 INSERT INTO student_achievement (student_id, achievement_id, earned_at) VALUES
  ('stu-1', 'ach-1', now() - interval '6 days');
+
+-- ---------------------------------------------------------------------
+-- Bài viết trang chủ (banner cho khách)
+-- ---------------------------------------------------------------------
+INSERT INTO blog_post (post_id, title, summary, content, theme, tag, is_published, is_pinned, author_id, author_name, created_at) VALUES
+ ('post-1', 'Ra mắt bản đồ ải Toán 9 - Học kỳ I',
+  '17 ải, 5 ải trùm, 10 thú đồng hành. Học như chơi game, bám sát SGK Kết nối tri thức.',
+  E'Bản đồ ải Toán 9 học kỳ I đã mở!\n\n• 5 vùng đất tương ứng 5 chương: hệ phương trình, bất phương trình, căn thức, hệ thức lượng, đường tròn.\n• Mỗi ải: học lý thuyết 5 phút, thảo luận cùng 3 AI, rồi vượt 3 câu thử thách.\n• Thắng ải trùm cuối chương để mở rương báu và nhận thú hiếm.\n\nĐăng ký là có ngay 7 ngày dùng thử miễn phí.',
+  'BLUE', 'Tính năng mới', TRUE, TRUE, 'u-admin', 'Ban biên tập MAEL', now() - interval '3 days'),
+ ('post-2', 'Đấu trường: giải toán siêu tốc, ít chữ, nhiều vui',
+  'Mini game mới: bắn bóng đáp án, combo liên tiếp, hạ quái vật bằng kiến thức.',
+  E'Đấu trường là mini game giải bài nhanh trong 2 phút.\n\n• Mỗi câu đúng: thú cưng tung chiêu, quái vật mất máu.\n• Đúng liên tiếp để lên combo, nhân điểm.\n• Câu hỏi lấy từ tài liệu do giảng viên tải lên và duyệt.\n\nChơi vừa sức: mỗi lượt tốn 1 thể lực, thể lực tự hồi sau 30 phút.',
+  'ORANGE', 'Mini game', TRUE, FALSE, 'u-admin', 'Ban biên tập MAEL', now() - interval '2 days'),
+ ('post-3', 'Mẹo giữ chuỗi học mỗi ngày chỉ 10 phút',
+  'Học đều mỗi ngày quan trọng hơn học dồn. Dùng khiên giữ chuỗi khi bận.',
+  E'Não nhớ lâu hơn khi ôn đều đặn.\n\n• Mỗi ngày qua ít nhất 1 ải hoặc chơi 1 lượt Đấu trường để chuỗi ngày +1.\n• Lỡ một ngày? Khiên giữ chuỗi (60 xu) sẽ tự bảo vệ chuỗi của em.\n• Chuỗi 3, 7, 14, 30 ngày mở huy hiệu và tặng xu.',
+  'GREEN', 'Góc học tập', TRUE, FALSE, 'u-lecturer', 'Nguyễn Thị Lan', now() - interval '1 day'),
+ ('post-4', 'Gói Trung tâm và Trường học: demo miễn phí',
+  'Trung tâm từ 30 học sinh, trường từ 200 học sinh. Đăng ký nhận tư vấn trong 1 phút.',
+  E'MAEL hỗ trợ trung tâm và trường học triển khai theo lớp.\n\n• Bảng theo dõi tiến độ từng học sinh.\n• Giáo viên tải tài liệu PDF, AI soạn câu hỏi và mini game, giáo viên duyệt trước khi giao.\n• Hotline: 0342 764 001 • Email: tduyminh0112@gmail.com',
+  'PURPLE', 'Hợp tác', TRUE, FALSE, 'u-admin', 'Ban biên tập MAEL', now() - interval '5 hours');
 
 COMMIT;

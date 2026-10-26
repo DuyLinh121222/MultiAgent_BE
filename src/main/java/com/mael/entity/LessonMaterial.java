@@ -38,6 +38,20 @@ public class LessonMaterial {
     @Column(name = "file_size")
     private Long fileSize;
 
+    /** Giảng viên tải tài liệu lên */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by")
+    private Lecturer uploadedBy;
+
+    /** Trạng thái AI đọc tài liệu: NONE | PROCESSING | DONE | FAILED */
+    @Column(name = "ai_status", nullable = false, length = 20)
+    @Builder.Default
+    private String aiStatus = "NONE";
+
+    /** Kết quả / lỗi khi AI đọc tài liệu (hiện cho giảng viên) */
+    @Column(name = "ai_note", columnDefinition = "TEXT")
+    private String aiNote;
+
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private LocalDateTime uploadedAt;
 

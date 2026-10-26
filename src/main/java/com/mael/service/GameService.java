@@ -56,6 +56,14 @@ public class GameService {
     private final AchievementService achievementService;
     private final NotificationService notificationService;
     private final QuizService quizService;
+    private final com.mael.service.game.StaminaService staminaService;
+    private final ArenaPlayRepository arenaPlayRepository;
+
+    public static final int ARENA_QUESTIONS = 10;
+    public static final int ARENA_TIME_SECONDS = 120;
+    public static final int ARENA_HEARTS = 3;
+    public static final int ARENA_COINS_PER_CORRECT = 2;
+    public static final int ARENA_DAILY_COIN_CAP = 40;
 
     // =================================================================
     //  Bản đồ
@@ -125,6 +133,8 @@ public class GameService {
         map.require(LESSON, lessonId);
         Lesson lesson = lessonRepository.findById(lessonId).orElseThrow();
         List<Question> questions = lessonQuestions(lessonId);
+        // Mỗi lần nộp thử thách tốn 1 thể lực (ải chưa có câu hỏi thì không tốn)
+        if (!questions.isEmpty()) staminaService.consume(student);
 
         Grade grade = grade(questions, req.answers());
         // Ải chưa có câu thử thách: học xong lý thuyết là qua ải
@@ -169,6 +179,7 @@ public class GameService {
         GameMap map = buildMap(student);
         map.require(BOSS, topicId);
         Topic topic = topicRepository.findById(topicId).orElseThrow();
+        staminaService.consume(student);
 
         // Chỉ chấm các câu thuộc đúng chương này (đề ải trùm được bốc ngẫu nhiên ở FE)
         Set<String> ids = req.answers().keySet();
@@ -204,6 +215,144 @@ public class GameService {
         }
         quizService.updateWeakness(student, topic, grade.correct, grade.total);
         return buildResultView(student, BOSS, topicId, grade, stars, reward, rewardPet);
+    }
+
+    // =================================================================
+    //  Đấu trường (mini game giải bài nhanh)
+    // =================================================================
+
+    @Transactional(readOnly = true)
+    public List<ArenaSummary> arenas() {
+        Student student = currentUser.student();
+        GameMap map = buildMap(student);
+        List<ArenaSummary> list = new ArrayList<>();
+        for (ChapterNode c : map.chapters) {
+            int count = arenaPool(c.topicId()).size();
+            if (count == 0) continue;
+            Topic t = topicRepository.findById(c.topicId()).orElseThrow();
+            list.add(new ArenaSummary(c.topicId(), c.orderIndex(), c.name(), c.unlocked(), count,
+                    arenaPlayRepository.bestScore(student.getId(), c.topicId()), t.getRewardPetCode()));
+        }
+        return list;
+    }
+
+    /** Lượt chơi đang diễn ra (lưu tạm trong bộ nhớ, hết hạn sau 15 phút) */
+    private static final class ArenaRun {
+        final String studentId;
+        final String topicId;
+        final List<String> questionIds;
+        final Map<String, String> answers = new LinkedHashMap<>();
+        final long createdAt = System.currentTimeMillis();
+
+        ArenaRun(String studentId, String topicId, List<String> questionIds) {
+            this.studentId = studentId;
+            this.topicId = topicId;
+            this.questionIds = questionIds;
+        }
+    }
+
+    private final Map<String, ArenaRun> arenaRuns = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Bắt đầu 1 lượt Đấu trường: trừ 1 thể lực, bốc tối đa 10 câu (ưu tiên câu ngắn).
+     * Đáp án được chấm từng câu ở BE (FE không biết trước đáp án).
+     */
+    @Transactional
+    public ArenaDetail startArena(String topicId) {
+        Student student = currentUser.student();
+        Topic topic = requireArenaUnlocked(student, topicId);
+        List<Question> pool = new ArrayList<>(arenaPool(topicId));
+        if (pool.isEmpty()) throw ApiException.badRequest("Đấu trường này chưa có câu hỏi");
+        staminaService.consume(student);
+        studentRepository.save(student);
+        Collections.shuffle(pool);
+        pool.sort(Comparator.comparingInt(q -> q.getContent().length() > 90 ? 1 : 0));
+        List<Question> picked = pool.stream().limit(ARENA_QUESTIONS).toList();
+        long now = System.currentTimeMillis();
+        arenaRuns.values().removeIf(r -> now - r.createdAt > 15 * 60_000L);
+        String runId = UUID.randomUUID().toString();
+        arenaRuns.put(runId, new ArenaRun(student.getId(), topicId, picked.stream().map(Question::getId).toList()));
+        return new ArenaDetail(runId, topicId, topic.getName(), ARENA_TIME_SECONDS, ARENA_HEARTS,
+                arenaPlayRepository.bestScore(student.getId(), topicId),
+                picked.stream().map(GameService::toStageQuestion).toList(), profile(student));
+    }
+
+    /** Chấm 1 câu ngay khi học sinh bấm bóng đáp án (mỗi câu chỉ tính lần chọn đầu tiên) */
+    @Transactional(readOnly = true)
+    public ArenaAnswerView answerArena(String runId, ArenaAnswerRequest req) {
+        ArenaRun run = ownRun(runId);
+        if (!run.questionIds.contains(req.questionId())) throw ApiException.badRequest("Câu hỏi không thuộc lượt chơi này");
+        Question q = questionRepository.findById(req.questionId()).orElseThrow();
+        String first = run.answers.putIfAbsent(req.questionId(), req.answer());
+        String used = first != null ? first : req.answer();
+        boolean ok = QuizService.isCorrect(q, used);
+        return new ArenaAnswerView(ok, q.getCorrectAnswer(), q.getExplanation());
+    }
+
+    @Transactional
+    public ArenaResultView finishArena(String runId, ArenaFinishRequest req) {
+        ArenaRun run = ownRun(runId);
+        arenaRuns.remove(runId);
+        Student student = currentUser.student();
+        Topic topic = topicRepository.findById(run.topicId).orElseThrow();
+        List<Question> questions = questionRepository.findAllById(run.answers.keySet());
+        Grade grade = grade(questions, run.answers);
+        // Combo tính lại ở BE theo đúng thứ tự trả lời
+        int combo = 0, cur = 0;
+        Map<String, Question> byId = new HashMap<>();
+        questions.forEach(q -> byId.put(q.getId(), q));
+        for (Map.Entry<String, String> e : run.answers.entrySet()) {
+            if (QuizService.isCorrect(byId.get(e.getKey()), e.getValue())) combo = Math.max(combo, ++cur);
+            else cur = 0;
+        }
+        int timeLeft = Math.max(0, Math.min(req == null || req.timeLeft() == null ? 0 : req.timeLeft(), ARENA_TIME_SECONDS));
+        if (System.currentTimeMillis() - run.createdAt > (ARENA_TIME_SECONDS + 30) * 1000L) timeLeft = 0;
+        int score = grade.correct * 100 + combo * 30 + (grade.correct == run.questionIds.size() ? timeLeft * 2 : 0);
+        int best = arenaPlayRepository.bestScore(student.getId(), run.topicId);
+
+        // Xu có giới hạn mỗi ngày để không cày lấy xu, XP vẫn tính
+        LocalDateTime startOfDay = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).atStartOfDay();
+        int coinsToday = arenaPlayRepository.coinsSince(student.getId(), startOfDay);
+        int coins = Math.max(0, Math.min(grade.correct * ARENA_COINS_PER_CORRECT, ARENA_DAILY_COIN_CAP - coinsToday));
+        int xp = grade.correct * 2;
+        int oldLevel = student.getXp() / XP_PER_LEVEL;
+        student.setCoins(student.getCoins() + coins);
+        student.setXp(student.getXp() + xp);
+
+        arenaPlayRepository.save(ArenaPlay.builder().student(student).topic(topic)
+                .correct(grade.correct).total(grade.total).bestCombo(combo).score(score).coinsEarned(coins).build());
+        if (grade.total > 0) quizService.updateWeakness(student, topic, grade.correct, grade.total);
+
+        var streak = staminaService.recordActivity(student);
+        studentRepository.save(student);
+        var newAchievements = achievementService.evaluate(student);
+        studentRepository.save(student);
+        return new ArenaResultView(grade.correct, grade.total, combo, score, Math.max(best, score), score > best,
+                coins, xp, coinsToday + coins >= ARENA_DAILY_COIN_CAP, student.getXp() / XP_PER_LEVEL > oldLevel,
+                grade.feedback, newAchievements, streak.streakDays(), streak.increased(), profile(student));
+    }
+
+    private ArenaRun ownRun(String runId) {
+        ArenaRun run = arenaRuns.get(runId);
+        if (run == null || !run.studentId.equals(currentUser.student().getId())) {
+            throw ApiException.notFound("Lượt chơi đã hết hạn, vào lại Đấu trường nhé");
+        }
+        return run;
+    }
+
+    private List<Question> arenaPool(String topicId) {
+        return questionRepository.findByTopicIdAndReviewStatus(topicId, ReviewStatus.PUBLISHED).stream()
+                .filter(q -> q.getQuestionType() == com.mael.entity.enums.QuestionType.SINGLE_CHOICE
+                        && q.getOptions() != null && q.getOptions().size() >= 2)
+                .toList();
+    }
+
+    private Topic requireArenaUnlocked(Student student, String topicId) {
+        GameMap map = buildMap(student);
+        ChapterNode c = map.chapters.stream().filter(x -> x.topicId().equals(topicId)).findFirst()
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy đấu trường trong lộ trình của bạn"));
+        if (!c.unlocked()) throw ApiException.forbidden("Đấu trường này mở khi em tới được chương " + c.orderIndex() + " trên bản đồ");
+        return topicRepository.findById(topicId).orElseThrow();
     }
 
     // =================================================================
@@ -245,7 +394,17 @@ public class GameService {
         student.setCoins(student.getCoins() - pet.getPriceCoins());
         givePet(student, pet, PetSource.SHOP);
         student.setActivePetCode(petCode);
+        achievementService.evaluate(student);
         return myPets();
+    }
+
+    /** Mua 1 khiên giữ chuỗi bằng xu */
+    @Transactional
+    public GameProfile buyStreakShield() {
+        Student student = currentUser.student();
+        staminaService.buyShield(student);
+        studentRepository.save(student);
+        return profile(student);
     }
 
     @Transactional
@@ -288,10 +447,14 @@ public class GameService {
         int totalStars = stageResultRepository.findByStudentId(s.getId()).stream().mapToInt(StageResult::getStars).sum();
         String petName = s.getActivePetCode() == null ? null
                 : petRepository.findById(s.getActivePetCode()).map(Pet::getName).orElse(null);
+        var energy = staminaService.refresh(s);
+        var streak = staminaService.streak(s);
         return new GameProfile(s.getFullName(), s.getGradeLevel(), Boolean.TRUE.equals(s.getOnboarded()),
                 s.getLearningGoal() != null ? s.getLearningGoal().name() : null,
                 s.getCoins() == null ? 0 : s.getCoins(), xp, xp / XP_PER_LEVEL + 1, xp % XP_PER_LEVEL, XP_PER_LEVEL,
-                totalStars, s.getActivePetCode(), petName);
+                totalStars, s.getActivePetCode(), petName,
+                energy.energy(), energy.maxEnergy(), energy.nextInSeconds(),
+                streak.streakDays(), streak.bestStreak(), streak.playedToday(), streak.atRisk(), streak.shields());
     }
 
     static int starsFor(int correct, int total) {
@@ -331,6 +494,9 @@ public class GameService {
 
     private StageResultView buildResultView(Student student, String type, String id, Grade grade, int stars,
                                             Reward reward, PetView rewardPet) {
+        var streak = staminaService.recordActivity(student);
+        studentRepository.save(student);
+        var newAchievements = achievementService.evaluate(student);
         studentRepository.save(student);
         // Tính lại bản đồ sau khi lưu kết quả để biết ải tiếp theo
         GameMap after = buildMap(student);
@@ -338,7 +504,7 @@ public class GameService {
         return new StageResultView(type, grade.correct, grade.total, stars, reward.previousStars, stars > 0,
                 reward.firstClear, reward.coins, reward.xp, reward.levelUp, rewardPet, grade.feedback,
                 next != null ? next.type : null, next != null ? next.id : null, next != null ? next.title : null,
-                profile(student));
+                profile(student), newAchievements, streak.streakDays(), streak.increased());
     }
 
     private void completeLesson(Student student, Lesson lesson) {

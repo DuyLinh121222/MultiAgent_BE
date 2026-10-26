@@ -38,6 +38,7 @@ public class DiscussionService {
     private final AchievementService achievementService;
     private final AiOrchestrator aiOrchestrator;
     private final CurrentUser currentUser;
+    private final com.mael.repository.QuestionRepository questionRepository;
 
     @Transactional
     public SessionView start(StartSessionRequest req) {
@@ -202,7 +203,22 @@ public class DiscussionService {
         return new DiscussionContext(session.getId(), studentName, lesson.getTitle(), lesson.getContent(),
                 lesson.getTopic().getName(),
                 lesson.getMisconceptions() == null ? List.of() : lesson.getMisconceptions(),
-                agents, turns, latestQuickReplies(history), maxRound);
+                agents, turns, latestQuickReplies(history), maxRound, practice(lesson));
+    }
+
+    /** Câu trắc nghiệm đã duyệt của bài, dùng cho lượt "áp dụng công thức" trong phòng thảo luận */
+    private List<DiscussionContext.PracticeQuestion> practice(Lesson lesson) {
+        return questionRepository.findByLessonIdAndReviewStatusOrderByCreatedAtAsc(lesson.getId(),
+                        com.mael.entity.enums.ReviewStatus.PUBLISHED).stream()
+                .filter(q -> q.getQuestionType() == com.mael.entity.enums.QuestionType.SINGLE_CHOICE
+                        && q.getOptions() != null && q.getOptions().size() >= 2)
+                .map(q -> {
+                    List<String> opts = q.getOptions().stream().map(o -> o.replaceFirst("^\\s*[A-Fa-f][.)]\\s*", "").trim()).toList();
+                    String letter = q.getCorrectAnswer().trim().substring(0, 1).toUpperCase();
+                    int idx = Math.max(0, Math.min(opts.size() - 1, letter.charAt(0) - 'A'));
+                    return new DiscussionContext.PracticeQuestion(q.getId(), q.getContent(), opts, idx, q.getExplanation());
+                })
+                .toList();
     }
 
     /** Các nút trả lời nhanh của tin nhắn AI gần nhất (nếu tin nhắn cuối cùng của AI có nút) */

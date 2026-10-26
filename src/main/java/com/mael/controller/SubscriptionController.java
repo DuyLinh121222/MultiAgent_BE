@@ -17,10 +17,19 @@ import java.util.List;
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
+    private final com.mael.repository.StudentRepository studentRepository;
 
-    /** Danh sách gói (public, không cần đăng nhập) */
+    /**
+     * Danh sách gói (public). Khách thấy cả gói học sinh, trung tâm, trường học.
+     * Học sinh đã đăng nhập chỉ thấy gói dành cho học sinh.
+     */
     @GetMapping("/plans")
     public List<PlanView> plans() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.mael.security.UserPrincipal p) {
+            var student = studentRepository.findByUserId(p.getUserId()).orElse(null);
+            if (student != null) return subscriptionService.plansFor(student);
+        }
         return subscriptionService.activePlans();
     }
 

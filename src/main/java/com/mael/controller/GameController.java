@@ -74,6 +74,35 @@ public class GameController {
     }
 
     /** Hoàn tất màn chào mừng 3 bước */
+    /** Mua khiên giữ chuỗi ngày học */
+    @PostMapping("/streak/shield")
+    public GameProfile buyShield() {
+        return gameService.buyStreakShield();
+    }
+
+    /** Danh sách đấu trường (mini game) theo chương */
+    @GetMapping("/arenas")
+    public List<ArenaSummary> arenas() {
+        return gameService.arenas();
+    }
+
+    /** Bắt đầu 1 lượt (tốn 1 thể lực) */
+    @PostMapping("/arenas/{topicId}/start")
+    public ArenaDetail startArena(@PathVariable String topicId) {
+        return gameService.startArena(topicId);
+    }
+
+    /** Chấm ngay 1 câu */
+    @PostMapping("/arena-runs/{runId}/answer")
+    public ArenaAnswerView answer(@PathVariable String runId, @Valid @RequestBody ArenaAnswerRequest req) {
+        return gameService.answerArena(runId, req);
+    }
+
+    @PostMapping("/arena-runs/{runId}/finish")
+    public ArenaResultView finish(@PathVariable String runId, @RequestBody(required = false) ArenaFinishRequest req) {
+        return gameService.finishArena(runId, req);
+    }
+
     @PostMapping("/onboarding")
     public GameProfile onboarding(@Valid @RequestBody OnboardingRequest req) {
         return gameService.completeOnboarding(req);

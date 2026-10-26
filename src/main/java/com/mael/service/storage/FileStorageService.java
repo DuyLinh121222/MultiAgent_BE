@@ -56,6 +56,45 @@ public class FileStorageService {
         }
     }
 
+    /** Lưu file PDF tài liệu (kiểm tra cả đuôi, content-type và 5 byte đầu "%PDF-") */
+    public StoredFile storePdf(MultipartFile file, String folder, long maxBytes) {
+        if (file == null || file.isEmpty()) {
+            throw ApiException.badRequest("Vui lòng chọn file PDF");
+        }
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        if (!name.endsWith(".pdf")) {
+            throw ApiException.badRequest("Chỉ nhận file PDF (.pdf)");
+        }
+        if (file.getSize() > maxBytes) {
+            throw ApiException.badRequest("File PDF tối đa " + (maxBytes / 1024 / 1024) + "MB");
+        }
+        try {
+            byte[] head = new byte[5];
+            try (InputStream in = file.getInputStream()) {
+                if (in.read(head) != 5 || !new String(head, java.nio.charset.StandardCharsets.US_ASCII).equals("%PDF-")) {
+                    throw ApiException.badRequest("File không phải PDF hợp lệ");
+                }
+            }
+            Path dir = root.resolve(folder).normalize();
+            Files.createDirectories(dir);
+            Path target = dir.resolve(UUID.randomUUID() + ".pdf");
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return new StoredFile("/uploads/" + folder + "/" + target.getFileName(), target);
+        } catch (IOException e) {
+            throw new ApiException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Không lưu được file");
+        }
+    }
+
+    /** Đường dẫn trên ổ đĩa của URL /uploads/... */
+    public Path resolveUrl(String url) {
+        String rel = url.startsWith("/uploads/") ? url.substring("/uploads/".length()) : url;
+        Path p = root.resolve(rel).normalize();
+        if (!p.startsWith(root)) throw ApiException.badRequest("Đường dẫn file không hợp lệ");
+        return p;
+    }
+
     /**
      * @param url  đường dẫn public (lưu vào DB)
      * @param path đường dẫn file trên ổ đĩa (để gửi cho AI đọc ảnh)
