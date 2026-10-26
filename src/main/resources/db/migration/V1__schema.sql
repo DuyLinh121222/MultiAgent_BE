@@ -1,47 +1,13 @@
 -- =====================================================================
 --  MAEL - Multi-Agent Edtech Learning
 --  PostgreSQL schema (theo MAEL Logical ERD - 28 bảng, 6 module + 4 bảng game/tổ chức)
---  Chạy trên database "mael":  psql -U postgres -d mael -f 01_schema.sql
---  Script chạy lại được nhiều lần (DROP ... CASCADE ở đầu).
+--  Flyway tự chạy file này 1 lần khi khởi động BE (bảng flyway_schema_history ghi lại đã chạy).
+--  KHÔNG sửa file này sau khi đã chạy: thay đổi cấu trúc DB thì tạo file mới V3__..., V4__...
 -- =====================================================================
 
 -- gen_random_uuid() có sẵn từ PostgreSQL 13. Nếu dùng bản cũ hơn thì bật pgcrypto.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-DROP TABLE IF EXISTS blog_post            CASCADE;
-DROP TABLE IF EXISTS arena_play           CASCADE;
-DROP TABLE IF EXISTS org_lead             CASCADE;
-DROP TABLE IF EXISTS stage_result         CASCADE;
-DROP TABLE IF EXISTS student_pet          CASCADE;
-DROP TABLE IF EXISTS content_report       CASCADE;
-DROP TABLE IF EXISTS content_review       CASCADE;
-DROP TABLE IF EXISTS solution             CASCADE;
-DROP TABLE IF EXISTS photo_problem        CASCADE;
-DROP TABLE IF EXISTS student_achievement  CASCADE;
-DROP TABLE IF EXISTS achievement          CASCADE;
-DROP TABLE IF EXISTS message              CASCADE;
-DROP TABLE IF EXISTS session_agent        CASCADE;
-DROP TABLE IF EXISTS discussion_session   CASCADE;
-DROP TABLE IF EXISTS ai_agent             CASCADE;
-DROP TABLE IF EXISTS attempt_answer       CASCADE;
-DROP TABLE IF EXISTS quiz_attempt         CASCADE;
-DROP TABLE IF EXISTS quiz_question        CASCADE;
-DROP TABLE IF EXISTS quiz                 CASCADE;
-DROP TABLE IF EXISTS weakness             CASCADE;
-DROP TABLE IF EXISTS question             CASCADE;
-DROP TABLE IF EXISTS lesson_progress      CASCADE;
-DROP TABLE IF EXISTS lesson_material      CASCADE;
-DROP TABLE IF EXISTS lesson               CASCADE;
-DROP TABLE IF EXISTS topic                CASCADE;
-DROP TABLE IF EXISTS learning_path        CASCADE;
-DROP TABLE IF EXISTS notification         CASCADE;
-DROP TABLE IF EXISTS payment              CASCADE;
-DROP TABLE IF EXISTS subscription         CASCADE;
-DROP TABLE IF EXISTS subscription_plan    CASCADE;
-DROP TABLE IF EXISTS student              CASCADE;
-DROP TABLE IF EXISTS lecturer             CASCADE;
-DROP TABLE IF EXISTS user_account         CASCADE;
-DROP TABLE IF EXISTS pet                  CASCADE;
 
 -- =====================================================================
 --  MODULE A - Tài khoản, Gói & Thanh toán

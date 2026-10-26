@@ -9,16 +9,14 @@ Web học Toán THCS cùng 3 AI (Thầy AI + 2 bạn AI phản biện). BE viế
 
 ## Chạy lần đầu
 
-### 1. Tạo bảng và dữ liệu mẫu
-Trong pgAdmin: chuột phải database `mael` → **Query Tool** → mở và chạy lần lượt:
-1. `database/01_schema.sql` (28 bảng theo Logical ERD, chạy lại được nhiều lần)
-2. `database/02_seed.sql` (lộ trình lớp 6-9, bài giảng, câu hỏi, 3 AI agent, tài khoản demo)
+### 1. Tạo bảng và dữ liệu mẫu: Flyway tự làm
+Chỉ cần tạo database rỗng tên `mael` trong pgAdmin. Khi BE khởi động, Flyway tự chạy các file trong
+`src/main/resources/db/migration` theo thứ tự, **mỗi file đúng 1 lần** (ghi lại trong bảng `flyway_schema_history`):
+1. `V1__schema.sql`: toàn bộ bảng
+2. `V2__seed_demo.sql`: lộ trình lớp 6-9, bài giảng, câu hỏi, 3 AI agent, tài khoản demo, bài viết trang chủ
 
-Hoặc dùng psql:
-```bash
-psql -U postgres -d mael -f database/01_schema.sql
-psql -U postgres -d mael -f database/02_seed.sql
-```
+- DB `mael` cũ tạo bằng tay (có bảng nhưng chưa có `flyway_schema_history`): lần chạy đầu BE tự xoá sạch và tạo lại (log có dòng "Phát hiện DB cũ..."). Muốn giữ DB cũ thì đặt `FLYWAY_RESET_LEGACY=false`.
+- Thay đổi cấu trúc DB về sau: **không sửa V1, V2** mà tạo file mới `V3__mo_ta.sql`, `V4__...`. Flyway chỉ chạy file mới.
 
 ### 2. Cấu hình `.env`
 Mọi key và mật khẩu nằm trong file `.env` ở thư mục gốc (Spring đọc qua `spring.config.import`, không cần thư viện thêm).
@@ -51,7 +49,7 @@ hoặc trong IntelliJ chạy `MaelApplication`. BE chạy ở http://localhost:8
 src/main/java/com/mael
 ├── config        SecurityConfig (JWT, CORS, phân quyền), WebConfig, OpenApiConfig
 ├── security      JwtService, JwtAuthenticationFilter, UserPrincipal, CurrentUser
-├── entity        28 entity map 1-1 với bảng trong 01_schema.sql (+ enums)
+├── entity        entity map 1-1 với bảng trong db/migration/V1__schema.sql (+ enums)
 ├── repository    Spring Data JPA
 ├── dto           Request / Response (record)
 ├── service       Nghiệp vụ
@@ -90,7 +88,7 @@ src/main/java/com/mael
 ## Bản đồ ải (gamification) - Toán 9 Học kỳ 1
 - Mỗi bài học = 1 ải (lý thuyết + 3 câu thử thách), cuối mỗi chương có **ải trùm** 5 câu ngẫu nhiên, thắng mở rương báu (thú hiếm + 50 xu).
 - Sao: đúng hết = 3 sao, >= 2/3 = 2 sao, >= 1/3 = 1 sao (qua ải). Xu: 10 xu / sao mới. XP: 5 / câu đúng, +20 khi qua ải lần đầu, 100 XP lên 1 cấp.
-- Nội dung 5 chương Toán 9 HK1 (SGK Kết nối tri thức, Tập 1) nằm trong `02_seed.sql`: 17 bài, 51 câu hỏi, mỗi bài có `misconceptions` (lỗi sai hay gặp). **Nhờ giảng viên chuyên môn duyệt lại trước khi dùng thật.**
+- Nội dung 5 chương Toán 9 HK1 (SGK Kết nối tri thức, Tập 1) nằm trong `db/migration/V2__seed_demo.sql`: 17 bài, 51 câu hỏi, mỗi bài có `misconceptions` (lỗi sai hay gặp). **Nhờ giảng viên chuyên môn duyệt lại trước khi dùng thật.**
 - API: `/api/game/map`, `/api/game/stages/{lessonId}`, `/api/game/bosses/{topicId}`, `/api/game/pets`, `/api/game/onboarding`.
 - Học sinh mới đăng ký có `onboarded = false`, FE đưa vào màn chào mừng 3 bước (lớp, mục tiêu, thú đồng hành).
 
@@ -127,3 +125,7 @@ src/main/java/com/mael
 - Form đăng ký và form tư vấn trung tâm / trường học có captcha hình (`GET /api/captcha`), tắt bằng `CAPTCHA_ENABLED=false` khi test Postman.
 - Tư vấn: tối đa 2 yêu cầu / số điện thoại / 24 giờ, 5 yêu cầu / IP / 24 giờ, có ô bẫy bot, chặn link trong ghi chú.
 - Đăng nhập sai 8 lần / 15 phút (theo IP + email) thì khoá tạm. Đăng ký tối đa 5 tài khoản / IP / giờ.
+
+## Tài liệu PDF mẫu cho giảng viên
+Thư mục `docs/tai-lieu-mau/`: Toán 9 Đại số Chương I, II, mỗi bài 1 file (lý thuyết, ví dụ, lỗi hay gặp, bài tự luyện có đáp án)
+và 2 file gộp theo chương. Đăng nhập `giangvien@mael.vn` → **Tài liệu PDF** → tải lên để AI soạn câu hỏi.

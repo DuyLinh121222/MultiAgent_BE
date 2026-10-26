@@ -9,8 +9,12 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/mael}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:}
+  flyway:
+    # Tự chạy các file src/main/resources/db/migration/V*.sql theo thứ tự, mỗi file đúng 1 lần
+    enabled: true
+    locations: classpath:db/migration
   jpa:
-    # Schema tạo bằng script database/01_schema.sql, Hibernate chỉ kiểm tra khớp entity
+    # Bảng do Flyway tạo, Hibernate chỉ kiểm tra khớp entity
     hibernate:
       ddl-auto: validate
     open-in-view: false
@@ -39,6 +43,10 @@ server:
   port: ${SERVER_PORT:8089}
 
 app:
+  flyway:
+    # DB cũ tạo bằng tay (có bảng nhưng chưa có flyway_schema_history): xoá sạch rồi để Flyway tạo lại, chỉ xảy ra 1 lần.
+    # Đặt false nếu muốn giữ DB cũ (khi đó tự xoá DB rồi chạy lại)
+    reset-legacy: ${FLYWAY_RESET_LEGACY:true}
   jwt:
     # Base64, tối thiểu 256 bit
     secret: ${JWT_SECRET}

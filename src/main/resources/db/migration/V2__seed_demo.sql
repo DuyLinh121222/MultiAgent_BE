@@ -1,6 +1,5 @@
 -- =====================================================================
---  MAEL - Dữ liệu mẫu (chạy sau 01_schema.sql)
---  psql -U postgres -d mael -f 02_seed.sql
+--  MAEL - Dữ liệu mẫu (Flyway tự chạy 1 lần, ngay sau V1__schema.sql)
 --
 --  Tài khoản demo (mật khẩu đều là: 123456)
 --    admin@mael.vn       ADMIN
@@ -10,7 +9,6 @@
 --  Học sinh mới tự đăng ký sẽ được đưa qua màn chào mừng 3 bước (onboarded = false).
 -- =====================================================================
 
-BEGIN;
 
 -- ---------------------------------------------------------------------
 -- Module A: tài khoản, gói, đăng ký
@@ -447,4 +445,3 @@ INSERT INTO blog_post (post_id, title, summary, content, theme, tag, is_publishe
   E'MAEL hỗ trợ trung tâm và trường học triển khai theo lớp.\n\n• Bảng theo dõi tiến độ từng học sinh.\n• Giáo viên tải tài liệu PDF, AI soạn câu hỏi và mini game, giáo viên duyệt trước khi giao.\n• Hotline: 0342 764 001 • Email: tduyminh0112@gmail.com',
   'PURPLE', 'Hợp tác', TRUE, FALSE, 'u-admin', 'Ban biên tập MAEL', now() - interval '5 hours');
 
-COMMIT;
