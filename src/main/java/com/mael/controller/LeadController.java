@@ -32,7 +32,9 @@ public class LeadController {
     }
 
     @PatchMapping("/admin/leads/{id}")
-    public LeadView updateStatus(@PathVariable String id, @RequestParam LeadStatus status) {
-        return leadService.updateStatus(id, status);
+    public LeadView updateStatus(@PathVariable String id,
+                                 @RequestParam(required = false) LeadStatus status,
+                                 @RequestParam(required = false) String adminNote) {
+        return leadService.updateStatus(id, status, adminNote);
     }
 }

@@ -79,6 +79,7 @@ public class QuizService {
             Question q = qq.getQuestion();
             String selected = answers.get(qq.getId());
             boolean correct = isCorrect(q, selected);
+            if (selected != null && !selected.isBlank()) q.recordAnswer(correct);
             BigDecimal earned = correct ? qq.getPoints() : BigDecimal.ZERO;
             max = max.add(qq.getPoints());
             score = score.add(earned);

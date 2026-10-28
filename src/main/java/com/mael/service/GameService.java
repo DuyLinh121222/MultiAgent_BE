@@ -535,6 +535,8 @@ public class GameService {
         for (Question q : questions) {
             String selected = answers.get(q.getId());
             boolean ok = QuizService.isCorrect(q, selected);
+            // Thống kê cho giảng viên: câu nào học sinh hay sai (bỏ qua câu bỏ trống)
+            if (selected != null && !selected.isBlank()) q.recordAnswer(ok);
             g.total++;
             if (ok) g.correct++;
             g.feedback.add(new AnswerFeedback(q.getId(), q.getContent(), selected, q.getCorrectAnswer(), ok, q.getExplanation()));

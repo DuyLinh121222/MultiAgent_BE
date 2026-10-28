@@ -55,6 +55,10 @@ public class OrgLead {
     @Column(name = "ip_address", length = 64)
     private String ipAddress;
 
+    /** Ghi chú nội bộ của admin (đã gọi, hẹn lịch demo...) */
+    @Column(name = "admin_note", columnDefinition = "TEXT")
+    private String adminNote;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

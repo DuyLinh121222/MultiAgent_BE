@@ -127,7 +127,8 @@ public class AuthService {
                 yield new UserInfo(account.getId(), account.getEmail(), account.getRole(), l.getFullName(),
                         null, l.getId(), null, null, null, null, null, null, null, null, null);
             }
-            case ADMIN -> new UserInfo(account.getId(), account.getEmail(), account.getRole(), "Quản trị viên",
+            case ADMIN -> new UserInfo(account.getId(), account.getEmail(), account.getRole(),
+                    account.getDisplayName() != null ? account.getDisplayName() : "Quản trị viên",
                     null, null, null, null, null, null, null, null, null, null, null);
         };
     }

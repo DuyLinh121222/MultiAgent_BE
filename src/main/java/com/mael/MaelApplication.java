@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import java.util.TimeZone;
 
 @SpringBootApplication
-public class MaelApplication {
+public class  MaelApplication {
 
     public static void main(String[] args) {
         // Máy ở VN hay có timezone mặc định "Asia/Saigon", một số bản PostgreSQL không nhận tên này

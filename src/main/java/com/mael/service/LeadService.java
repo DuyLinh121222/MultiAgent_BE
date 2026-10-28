@@ -80,15 +80,16 @@ public class LeadService {
     }
 
     @Transactional
-    public LeadView updateStatus(String id, LeadStatus status) {
+    public LeadView updateStatus(String id, LeadStatus status, String adminNote) {
         OrgLead lead = leadRepository.findById(id).orElseThrow(() -> ApiException.notFound("Không tìm thấy yêu cầu tư vấn"));
-        lead.setStatus(status);
+        if (status != null) lead.setStatus(status);
+        if (adminNote != null) lead.setAdminNote(adminNote.isBlank() ? null : adminNote.trim());
         return toView(lead);
     }
 
     private static LeadView toView(OrgLead l) {
         return new LeadView(l.getId(), l.getOrgType(), l.getOrgName(), l.getContactName(), l.getPhone(), l.getEmail(),
-                l.getStudentCount(), l.getPlan() != null ? l.getPlan().getName() : null, l.getNote(), l.getStatus(),
+                l.getStudentCount(), l.getPlan() != null ? l.getPlan().getName() : null, l.getNote(), l.getStatus(), l.getAdminNote(),
                 l.getCreatedAt());
     }
 }

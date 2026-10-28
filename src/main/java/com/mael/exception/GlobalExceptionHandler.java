@@ -40,10 +40,11 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(401, "Unauthorized", "Email hoặc mật khẩu không đúng"));
     }
 
-    @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<ErrorResponse> handleDisabled(DisabledException ex) {
+    /** Tài khoản bị admin khoá: Spring ném LockedException (isAccountNonLocked) hoặc DisabledException */
+    @ExceptionHandler({DisabledException.class, org.springframework.security.authentication.LockedException.class})
+    public ResponseEntity<ErrorResponse> handleDisabled(Exception ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(403, "Forbidden", "Tài khoản đã bị khóa"));
+                .body(ErrorResponse.of(403, "Forbidden", "Tài khoản đã bị khóa. Vui lòng liên hệ MAEL qua hotline 0342 764 001"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

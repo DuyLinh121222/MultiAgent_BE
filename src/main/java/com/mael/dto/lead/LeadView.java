@@ -16,6 +16,7 @@ public record LeadView(
         String planName,
         String note,
         LeadStatus status,
+        String adminNote,
         LocalDateTime createdAt
 ) {
 }

@@ -82,6 +82,22 @@ public class Question {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
+    /** Số lượt học sinh trả lời câu này (ải, ải trùm, Đấu trường, quiz) */
+    @Column(name = "answered_count", nullable = false)
+    @Builder.Default
+    private Integer answeredCount = 0;
+
+    /** Số lượt trả lời sai: giảng viên xem câu nào học sinh hay sai nhất */
+    @Column(name = "wrong_count", nullable = false)
+    @Builder.Default
+    private Integer wrongCount = 0;
+
+    /** Ghi nhận 1 lượt trả lời */
+    public void recordAnswer(boolean correct) {
+        answeredCount = (answeredCount == null ? 0 : answeredCount) + 1;
+        if (!correct) wrongCount = (wrongCount == null ? 0 : wrongCount) + 1;
+    }
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

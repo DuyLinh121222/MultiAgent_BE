@@ -37,6 +37,10 @@ public class UserAccount {
     @Builder.Default
     private AccountStatus status = AccountStatus.ACTIVE;
 
+    /** Tên hiển thị của tài khoản quản trị (học sinh / giảng viên lấy tên từ hồ sơ riêng) */
+    @Column(name = "display_name", length = 150)
+    private String displayName;
+
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 

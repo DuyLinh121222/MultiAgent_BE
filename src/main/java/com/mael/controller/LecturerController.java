@@ -19,6 +19,31 @@ public class LecturerController {
 
     private final ReviewService reviewService;
     private final com.mael.service.DocumentService documentService;
+    private final com.mael.service.LecturerInsightService insightService;
+
+    // ---------------- Tổng quan, lịch sử duyệt, phân tích học tập ----------------
+
+    @GetMapping("/dashboard")
+    public com.mael.dto.lecturer.LecturerDashboard dashboard() {
+        return insightService.dashboard();
+    }
+
+    /** mine = true: chỉ lịch sử của tôi; false: của tất cả giảng viên */
+    @GetMapping("/reviews")
+    public List<com.mael.dto.lecturer.ReviewHistoryItem> reviews(@RequestParam(defaultValue = "true") boolean mine,
+                                                                 @RequestParam(defaultValue = "50") int limit) {
+        return insightService.history(mine, limit);
+    }
+
+    @PostMapping("/review-bulk")
+    public java.util.Map<String, Integer> bulkReview(@Valid @RequestBody com.mael.dto.lecturer.BulkReviewRequest req) {
+        return insightService.bulkReview(req);
+    }
+
+    @GetMapping("/analytics")
+    public com.mael.dto.lecturer.LearningAnalytics analytics(@RequestParam(required = false) Integer grade) {
+        return insightService.analytics(grade);
+    }
 
     // ---------------- Tài liệu PDF -> AI soạn câu hỏi / mini game ----------------
 
