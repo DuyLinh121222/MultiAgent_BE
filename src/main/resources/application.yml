@@ -40,7 +40,8 @@ spring:
       mail.smtp.starttls.enable: true
 
 server:
-  port: ${SERVER_PORT:8089}
+  # Render tự đặt biến PORT; chạy máy cá nhân thì dùng 8089
+  port: ${SERVER_PORT:${PORT:8089}}
 
 app:
   flyway:
