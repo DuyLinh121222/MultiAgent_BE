@@ -24,6 +24,7 @@ public class CurrentUser {
     private final StudentRepository studentRepository;
     private final LecturerRepository lecturerRepository;
     private final UserAccountRepository userAccountRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public UserPrincipal principal() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -55,11 +56,13 @@ public class CurrentUser {
         return lecturerRepository.findByUserId(userId()).orElseGet(() -> {
             if (!isAdmin()) throw ApiException.forbidden("Chức năng này chỉ dành cho giảng viên");
             UserAccount admin = userAccountRepository.findById(userId()).orElseThrow();
-            return lecturerRepository.save(Lecturer.builder()
-                    .user(admin)
-                    .fullName(admin.getDisplayName() != null ? admin.getDisplayName() : "Quản trị viên")
-                    .specialization("Quản trị hệ thống")
-                    .build());
+            // ON CONFLICT: 2 request cùng lúc (menu + trang) không bị lỗi trùng hồ sơ
+            jdbc.update("""
+                    insert into lecturer (lecturer_id, user_id, full_name, specialization)
+                    values (gen_random_uuid()::text, ?, ?, 'Quản trị hệ thống')
+                    on conflict (user_id) do nothing""",
+                    admin.getId(), admin.getDisplayName() != null ? admin.getDisplayName() : "Quản trị viên");
+            return lecturerRepository.findByUserId(admin.getId()).orElseThrow();
         });
     }
 

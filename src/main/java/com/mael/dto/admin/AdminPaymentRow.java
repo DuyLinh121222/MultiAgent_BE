@@ -14,6 +14,11 @@ public record AdminPaymentRow(
         String status,
         String transactionCode,
         LocalDateTime createdAt,
-        LocalDateTime paidAt
+        LocalDateTime paidAt,
+        /** Nội dung chuyển khoản để đối chiếu trong app MoMo */
+        String transferCode,
+        /** Học sinh bấm "Tôi đã chuyển khoản" lúc nào */
+        LocalDateTime customerPaidAt,
+        String adminNote
 ) {
 }

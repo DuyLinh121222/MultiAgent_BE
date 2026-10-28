@@ -23,14 +23,12 @@ public class BlogController {
 
     private final BlogService blogService;
 
-    @Value("${app.site.phone:0342764001}")
-    private String phone;
-    @Value("${app.site.email:tduyminh0112@gmail.com}")
+    @Value("${app.site.email:maeledu709@gmail.com}")
     private String email;
 
     @GetMapping("/public/site")
     public Map<String, String> site() {
-        return Map.of("phone", phone, "email", email, "name", "MAEL.EDU");
+        return Map.of("email", email, "name", "MAEL.EDU");
     }
 
     @GetMapping("/blog")

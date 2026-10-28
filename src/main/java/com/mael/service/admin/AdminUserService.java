@@ -276,6 +276,33 @@ public class AdminUserService {
         return detail(userId);
     }
 
+    /**
+     * Nạp / trừ xu cho học sinh (thưởng thi đua, bù lỗi, mua xu ngoài app...). Xu không xuống dưới 0.
+     */
+    @Transactional
+    public AdminUserDetail adjustCoins(String userId, CoinAdjustRequest req) {
+        UserAccount account = account(userId);
+        if (account.getRole() != Role.STUDENT) throw ApiException.badRequest("Chỉ nạp xu cho học sinh");
+        if (req.amount() == 0) throw ApiException.badRequest("Số xu phải khác 0");
+        Student student = studentRepository.findByUserId(userId).orElseThrow();
+        int before = student.getCoins() == null ? 0 : student.getCoins();
+        if (before + req.amount() < 0) {
+            throw ApiException.badRequest("Học sinh chỉ có " + before + " xu, không trừ được " + (-req.amount()) + " xu");
+        }
+        student.setCoins(before + req.amount());
+        String reason = req.reason().trim();
+        if (req.amount() > 0) {
+            notificationService.notify(student, NotificationType.SYSTEM, "Bạn được tặng " + req.amount() + " xu 🎉",
+                    reason + ". Ghé cửa hàng thú cưng hoặc mua khiên giữ chuỗi nhé!", null);
+        } else {
+            notificationService.notify(student, NotificationType.SYSTEM, "Điều chỉnh " + req.amount() + " xu", reason, null);
+        }
+        auditService.log("ADJUST_COINS", "USER", userId, (req.amount() > 0 ? "Nạp " : "Trừ ") + Math.abs(req.amount())
+                + " xu cho " + student.getFullName() + " (" + before + " → " + student.getCoins() + "). Lý do: " + reason);
+        studentRepository.flush();
+        return detail(userId);
+    }
+
     // ------------------------------------------------------------------
 
     private AdminUserRow row(String userId) {

@@ -39,6 +39,12 @@ public class PaymentController {
         return paymentService.get(paymentId);
     }
 
+    /** Học sinh báo đã chuyển khoản qua QR MoMo, chờ admin xác nhận */
+    @PostMapping("/{paymentId}/mark-paid")
+    public PaymentView markPaid(@PathVariable String paymentId) {
+        return paymentService.markPaid(paymentId);
+    }
+
     /** DEV ONLY: giả lập thanh toán thành công */
     @PostMapping("/{paymentId}/mock-confirm")
     public PaymentView mockConfirm(@PathVariable String paymentId) {

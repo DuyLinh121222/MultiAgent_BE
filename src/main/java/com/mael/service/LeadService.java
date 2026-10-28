@@ -46,7 +46,7 @@ public class LeadService {
         }
         if (leadRepository.countByIpAddressAndCreatedAtAfter(ip, dayAgo) >= maxPerIp) {
             throw new ApiException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
-                    "Bạn đã gửi quá nhiều yêu cầu trong hôm nay, vui lòng gọi hotline 0342 764 001");
+                    "Bạn đã gửi quá nhiều yêu cầu trong hôm nay, vui lòng gửi email tới maeledu709@gmail.com");
         }
         String note = req.note() == null ? null : req.note().trim();
         if (note != null && note.matches("(?is).*(https?://|www\\.|<a\\s|\\[url).*")) {

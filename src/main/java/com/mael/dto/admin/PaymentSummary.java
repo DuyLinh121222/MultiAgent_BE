@@ -8,6 +8,8 @@ public record PaymentSummary(
         BigDecimal successAmount,
         long pendingCount,
         long failedCount,
+        /** Học sinh báo đã chuyển, chờ admin xác nhận */
+        long waitingCount,
         PageResponse<AdminPaymentRow> page
 ) {
 }

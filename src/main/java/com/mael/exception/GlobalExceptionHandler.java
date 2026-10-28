@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({DisabledException.class, org.springframework.security.authentication.LockedException.class})
     public ResponseEntity<ErrorResponse> handleDisabled(Exception ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ErrorResponse.of(403, "Forbidden", "Tài khoản đã bị khóa. Vui lòng liên hệ MAEL qua hotline 0342 764 001"));
+                .body(ErrorResponse.of(403, "Forbidden", "Tài khoản đã bị khóa. Vui lòng liên hệ MAEL qua email maeledu709@gmail.com"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

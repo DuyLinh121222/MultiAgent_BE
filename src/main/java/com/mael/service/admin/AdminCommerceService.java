@@ -24,6 +24,8 @@ public class AdminCommerceService {
     private final JdbcTemplate jdbc;
     private final SubscriptionPlanRepository planRepository;
     private final AuditService auditService;
+    private final com.mael.service.PaymentService paymentService;
+    private final com.mael.security.CurrentUser currentUser;
 
     // ------------------------------- Gói học -------------------------------
 
@@ -121,8 +123,25 @@ public class AdminCommerceService {
 
     // ------------------------------- Giao dịch -------------------------------
 
+    /** Admin đã thấy tiền về ví MoMo: kích hoạt gói cho học sinh */
+    @Transactional
+    public void confirmPayment(String paymentId, String note) {
+        var p = paymentService.adminConfirm(paymentId, currentUser.userId(), note);
+        var sub = p.getSubscription();
+        auditService.log("CONFIRM_PAYMENT", "PAYMENT", p.getId(), "Xác nhận thanh toán " + money(p.getAmount()) + " mã "
+                + p.getTransferCode() + " của " + sub.getStudent().getFullName() + " (" + sub.getPlan().getName() + ")"
+                + (note == null || note.isBlank() ? "" : ". Ghi chú: " + note.trim()));
+    }
+
+    @Transactional
+    public void rejectPayment(String paymentId, String reason) {
+        var p = paymentService.adminReject(paymentId, currentUser.userId(), reason);
+        auditService.log("REJECT_PAYMENT", "PAYMENT", p.getId(), "Từ chối thanh toán " + money(p.getAmount()) + " mã "
+                + p.getTransferCode() + " của " + p.getSubscription().getStudent().getFullName() + ". Lý do: " + reason.trim());
+    }
+
     @Transactional(readOnly = true)
-    public PaymentSummary payments(PaymentStatus status, String q, int page, int size) {
+    public PaymentSummary payments(String status, String q, int page, int size) {
         String from = """
                 from payment pm join subscription s on s.subscription_id = pm.subscription_id
                 join subscription_plan p on p.plan_id = s.plan_id
@@ -141,12 +160,24 @@ public class AdminCommerceService {
                 select count(*) filter (where pm.status = 'SUCCESS') ok,
                        coalesce(sum(pm.amount) filter (where pm.status = 'SUCCESS'), 0) ok_amount,
                        count(*) filter (where pm.status = 'PENDING') pending,
-                       count(*) filter (where pm.status = 'FAILED') failed
+                       count(*) filter (where pm.status = 'FAILED') failed,
+                       count(*) filter (where pm.status = 'PENDING' and pm.customer_paid_at is not null) waiting
                 """ + from + where, args.toArray());
 
-        if (status != null) {
-            where.append(" and pm.status = ?");
-            args.add(status.name());
+        // WAITING = học sinh đã báo chuyển khoản, chờ admin xác nhận
+        if (status != null && !status.isBlank()) {
+            if ("WAITING".equalsIgnoreCase(status)) {
+                where.append(" and pm.status = 'PENDING' and pm.customer_paid_at is not null");
+            } else {
+                PaymentStatus st;
+                try {
+                    st = PaymentStatus.valueOf(status.toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException e) {
+                    throw ApiException.badRequest("Trạng thái không hợp lệ");
+                }
+                where.append(" and pm.status = ?");
+                args.add(st.name());
+            }
         }
         Long total = jdbc.queryForObject("select count(*) " + from + where, Long.class, args.toArray());
         int safeSize = Math.min(Math.max(size, 1), 100);
@@ -156,17 +187,20 @@ public class AdminCommerceService {
         pageArgs.add(safePage * safeSize);
         List<AdminPaymentRow> rows = jdbc.query("""
                 select pm.payment_id, u.user_id, st.full_name, u.email, p.name plan_name, pm.amount, pm.method, pm.status,
-                       pm.transaction_code, pm.created_at, pm.paid_at
-                """ + from + where + " order by pm.created_at desc limit ? offset ?", (rs, i) -> {
+                       pm.transaction_code, pm.created_at, pm.paid_at, pm.transfer_code, pm.customer_paid_at, pm.admin_note
+                """ + from + where + " order by coalesce(pm.customer_paid_at, pm.created_at) desc limit ? offset ?", (rs, i) -> {
             Timestamp paid = rs.getTimestamp("paid_at");
+            Timestamp marked = rs.getTimestamp("customer_paid_at");
             return new AdminPaymentRow(rs.getString("payment_id"), rs.getString("user_id"), rs.getString("full_name"),
                     rs.getString("email"), rs.getString("plan_name"), rs.getBigDecimal("amount"), rs.getString("method"),
                     rs.getString("status"), rs.getString("transaction_code"),
-                    rs.getTimestamp("created_at").toLocalDateTime(), paid == null ? null : paid.toLocalDateTime());
+                    rs.getTimestamp("created_at").toLocalDateTime(), paid == null ? null : paid.toLocalDateTime(),
+                    rs.getString("transfer_code"), marked == null ? null : marked.toLocalDateTime(), rs.getString("admin_note"));
         }, pageArgs.toArray());
 
         return new PaymentSummary(((Number) agg.get("ok")).longValue(), (BigDecimal) agg.get("ok_amount"),
                 ((Number) agg.get("pending")).longValue(), ((Number) agg.get("failed")).longValue(),
+                ((Number) agg.get("waiting")).longValue(),
                 new PageResponse<>(rows, total == null ? 0 : total, safePage, safeSize));
     }
 }

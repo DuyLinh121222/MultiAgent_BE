@@ -59,6 +59,21 @@ public class Payment {
     @Builder.Default
     private PaymentStatus status = PaymentStatus.PENDING;
 
+    /** Mã nội dung chuyển khoản học sinh ghi khi quét QR MoMo, VD MAEL7K3Q */
+    @Column(name = "transfer_code", unique = true, length = 20)
+    private String transferCode;
+
+    /** Lúc học sinh bấm "Tôi đã chuyển khoản" (chờ admin đối chiếu) */
+    @Column(name = "customer_paid_at")
+    private LocalDateTime customerPaidAt;
+
+    /** Admin xác nhận / từ chối đơn */
+    @Column(name = "confirmed_by", length = 36)
+    private String confirmedBy;
+
+    @Column(name = "admin_note", columnDefinition = "TEXT")
+    private String adminNote;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 

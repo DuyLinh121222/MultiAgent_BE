@@ -58,8 +58,7 @@ app:
     dir: ${UPLOAD_DIR:uploads}
   site:
     # Thông tin liên hệ hiện ở trang chủ
-    phone: ${SITE_PHONE:0342764001}
-    email: ${SITE_EMAIL:tduyminh0112@gmail.com}
+    email: ${SITE_EMAIL:maeledu709@gmail.com}
   security:
     # Bật captcha cho form đăng ký và form tư vấn trung tâm / trường học
     captcha-enabled: ${CAPTCHA_ENABLED:true}
@@ -97,7 +96,7 @@ app:
     # mock = chưa gọi MoMo. Khi tích hợp đổi thành momo và thêm MomoPaymentGateway
     provider: ${PAYMENT_PROVIDER:mock}
     # Cho phép nút "Giả lập thanh toán thành công" ở FE. TẮT khi lên production
-    mock-confirm-enabled: ${PAYMENT_MOCK_CONFIRM_ENABLED:true}
+    mock-confirm-enabled: ${PAYMENT_MOCK_CONFIRM_ENABLED:false}
   momo:
     endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
     partner-code: ${MOMO_PARTNER_CODE:}

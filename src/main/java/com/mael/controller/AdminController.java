@@ -4,7 +4,6 @@ import com.mael.dto.admin.*;
 import com.mael.dto.review.CreateLessonRequest;
 import com.mael.dto.review.CreateQuestionRequest;
 import com.mael.entity.enums.AccountStatus;
-import com.mael.entity.enums.PaymentStatus;
 import com.mael.entity.enums.Role;
 import com.mael.service.AdminContentService;
 import com.mael.service.admin.AdminCommerceService;
@@ -86,6 +85,12 @@ public class AdminController {
         return userService.grantPlan(userId, req);
     }
 
+    /** Nạp (số dương) / trừ (số âm) xu cho học sinh */
+    @PostMapping("/users/{userId}/coins")
+    public AdminUserDetail adjustCoins(@PathVariable String userId, @Valid @RequestBody CoinAdjustRequest req) {
+        return userService.adjustCoins(userId, req);
+    }
+
     // ---------------- Gói học & giao dịch ----------------
 
     @GetMapping("/plans")
@@ -110,11 +115,26 @@ public class AdminController {
     }
 
     @GetMapping("/payments")
-    public PaymentSummary payments(@RequestParam(required = false) PaymentStatus status,
+    /** status: WAITING (học sinh báo đã chuyển, chờ xác nhận), PENDING, SUCCESS, FAILED, REFUNDED */
+    public PaymentSummary payments(@RequestParam(required = false) String status,
                                    @RequestParam(required = false) String q,
                                    @RequestParam(defaultValue = "0") int page,
                                    @RequestParam(defaultValue = "20") int size) {
         return commerceService.payments(status, q, page, size);
+    }
+
+    /** Đã thấy tiền về ví MoMo: kích hoạt gói cho học sinh */
+    @PostMapping("/payments/{paymentId}/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirmPayment(@PathVariable String paymentId, @Valid @RequestBody(required = false) PaymentDecisionRequest req) {
+        commerceService.confirmPayment(paymentId, req == null ? null : req.note());
+    }
+
+    /** Không thấy tiền / sai số tiền: từ chối, note = lý do (bắt buộc) */
+    @PostMapping("/payments/{paymentId}/reject")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void rejectPayment(@PathVariable String paymentId, @Valid @RequestBody PaymentDecisionRequest req) {
+        commerceService.rejectPayment(paymentId, req.note());
     }
 
     // ---------------- Nhật ký ----------------

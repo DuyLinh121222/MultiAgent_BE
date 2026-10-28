@@ -51,8 +51,10 @@ public final class DtoMapper {
 
     public static PaymentView toPaymentView(Payment p, String qrCodeUrl) {
         return new PaymentView(p.getId(), p.getSubscription().getId(), p.getSubscription().getPlan().getName(),
+                p.getSubscription().getPlan().getDurationDays(),
                 p.getAmount(), p.getMethod(), p.getStatus(), p.getPayUrl(), qrCodeUrl,
-                p.getCreatedAt(), p.getPaidAt());
+                p.getCreatedAt(), p.getPaidAt(), p.getTransferCode(), p.getCustomerPaidAt(),
+                p.getStatus() == com.mael.entity.enums.PaymentStatus.FAILED ? p.getAdminNote() : null);
     }
 
     public static AgentView toAgentView(SessionAgent sa) {

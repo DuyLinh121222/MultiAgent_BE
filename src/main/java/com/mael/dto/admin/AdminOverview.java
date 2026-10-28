@@ -31,7 +31,8 @@ public record AdminOverview(
             long pendingLessons,
             long pendingQuestions,
             long openReports,
-            long newLeads
+            long newLeads,
+            long waitingPayments
     ) {
     }
 

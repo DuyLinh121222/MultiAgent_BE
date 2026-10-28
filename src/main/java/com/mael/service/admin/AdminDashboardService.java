@@ -50,7 +50,8 @@ public class AdminDashboardService {
                 count("select count(*) from lesson where review_status = 'PENDING_REVIEW'"),
                 count("select count(*) from question where review_status = 'PENDING_REVIEW'"),
                 count("select count(*) from content_report where status in ('OPEN', 'IN_REVIEW')"),
-                count("select count(*) from org_lead where status = 'NEW'")
+                count("select count(*) from org_lead where status = 'NEW'"),
+                count("select count(*) from payment where status = 'PENDING' and customer_paid_at is not null")
         );
 
         return new AdminOverview(stats, revenueByMonth(thisMonth), signupsByDay(today), activeByPlan(), studentsByGrade(),
@@ -114,7 +115,9 @@ public class AdminDashboardService {
 
     private List<RecentPayment> recentPayments() {
         return jdbc.query("""
-                        select pm.payment_id, st.full_name, p.name plan_name, pm.amount, pm.status, pm.created_at
+                        select pm.payment_id, st.full_name, p.name plan_name, pm.amount,
+                               case when pm.status = 'PENDING' and pm.customer_paid_at is not null then 'WAITING' else pm.status end status,
+                               pm.created_at
                         from payment pm join subscription s on s.subscription_id = pm.subscription_id
                         join subscription_plan p on p.plan_id = s.plan_id join student st on st.student_id = s.student_id
                         order by pm.created_at desc limit 6""",

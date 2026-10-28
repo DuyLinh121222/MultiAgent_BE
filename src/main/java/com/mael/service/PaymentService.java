@@ -57,6 +57,14 @@ public class PaymentService {
             throw ApiException.badRequest("Gói dùng thử được kích hoạt tự động khi đăng ký");
         }
 
+        // Học sinh bấm mua lại cùng gói khi đơn cũ còn chờ (chưa báo đã chuyển) thì dùng lại đơn cũ, tránh rác
+        java.util.Optional<Payment> open = paymentRepository.findByStudentId(student.getId()).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.PENDING && p.getCustomerPaidAt() == null
+                        && p.getSubscription().getPlan().getId().equals(plan.getId())
+                        && p.getCreatedAt().isAfter(LocalDateTime.now().minusDays(1)))
+                .findFirst();
+        if (open.isPresent()) return DtoMapper.toPaymentView(open.get(), null);
+
         Subscription subscription = subscriptionRepository.save(Subscription.builder()
                 .student(student)
                 .plan(plan)
@@ -65,16 +73,75 @@ public class PaymentService {
         Payment payment = paymentRepository.save(Payment.builder()
                 .subscription(subscription)
                 .amount(plan.getPrice())
-                .method("MOMO_WALLET")
+                .method("MOMO_QR")
                 .requestId(UUID.randomUUID().toString())
+                .transferCode(newTransferCode())
                 .status(PaymentStatus.PENDING)
                 .build());
+        return DtoMapper.toPaymentView(payment, null);
+    }
 
-        PaymentGateway.PaymentInit init = paymentGateway.createPayment(payment,
-                "Thanh toán " + plan.getName() + " - MAEL");
-        payment.setPayUrl(init.payUrl());
-        payment.setResultCode(init.resultCode());
-        return DtoMapper.toPaymentView(payment, init.qrCodeUrl());
+    /**
+     * Học sinh báo đã chuyển khoản qua QR MoMo. Đơn vẫn PENDING, hiện ở mục "Chờ xác nhận" của admin.
+     */
+    @Transactional
+    public PaymentView markPaid(String paymentId) {
+        Payment payment = getOwnPayment(paymentId);
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw ApiException.badRequest("Đơn này đã được xử lý");
+        }
+        if (payment.getCustomerPaidAt() == null) payment.setCustomerPaidAt(LocalDateTime.now());
+        return DtoMapper.toPaymentView(payment, null);
+    }
+
+    /** Admin đối chiếu app MoMo thấy đã nhận tiền: kích hoạt gói */
+    @Transactional
+    public Payment adminConfirm(String paymentId, String adminUserId, String note) {
+        Payment payment = paymentRepository.findDetailById(paymentId)
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy giao dịch"));
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw ApiException.badRequest("Đơn này đã được xử lý trước đó");
+        }
+        payment.setConfirmedBy(adminUserId);
+        payment.setAdminNote(note == null || note.isBlank() ? null : note.trim());
+        if (payment.getCustomerPaidAt() == null) payment.setCustomerPaidAt(LocalDateTime.now());
+        markSuccess(payment, "QR-" + (payment.getTransferCode() != null ? payment.getTransferCode() : payment.getId().substring(0, 8)));
+        return payment;
+    }
+
+    /** Admin không thấy tiền về / sai số tiền: từ chối, học sinh nhận thông báo kèm lý do */
+    @Transactional
+    public Payment adminReject(String paymentId, String adminUserId, String reason) {
+        if (reason == null || reason.isBlank()) throw ApiException.badRequest("Vui lòng ghi lý do từ chối");
+        Payment payment = paymentRepository.findDetailById(paymentId)
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy giao dịch"));
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw ApiException.badRequest("Đơn này đã được xử lý trước đó");
+        }
+        payment.setStatus(PaymentStatus.FAILED);
+        payment.setConfirmedBy(adminUserId);
+        payment.setAdminNote(reason.trim());
+        payment.getSubscription().setStatus(SubscriptionStatus.CANCELLED);
+        Subscription sub = payment.getSubscription();
+        notificationService.notify(sub.getStudent(), NotificationType.PAYMENT,
+                "Chưa xác nhận được thanh toán " + sub.getPlan().getName(),
+                "Lý do: " + reason.trim() + ". Nếu bạn đã chuyển tiền, hãy gửi ảnh giao dịch tới maeledu709@gmail.com kèm mã "
+                        + payment.getTransferCode() + ".", payment);
+        return payment;
+    }
+
+    private static final String CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+
+    /** MAEL + 6 ký tự dễ đọc (bỏ 0/O, 1/I/L), không trùng */
+    private String newTransferCode() {
+        for (int i = 0; i < 20; i++) {
+            StringBuilder sb = new StringBuilder("MAEL");
+            for (int j = 0; j < 6; j++) sb.append(CODE_CHARS.charAt(RANDOM.nextInt(CODE_CHARS.length())));
+            String code = sb.toString();
+            if (!paymentRepository.existsByTransferCode(code)) return code;
+        }
+        throw new IllegalStateException("Không tạo được mã chuyển khoản");
     }
 
     @Transactional(readOnly = true)
