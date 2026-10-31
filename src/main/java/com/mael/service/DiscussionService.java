@@ -43,8 +43,16 @@ public class DiscussionService {
     @Transactional
     public SessionView start(StartSessionRequest req) {
         Student student = currentUser.student();
-        subscriptionService.checkAiSessionQuota(student);
         Lesson lesson = learningService.getPublishedLesson(req.lessonId());
+
+        // Đang có phiên chưa kết thúc cho bài này: mở lại phiên đó, giữ nguyên đoạn chat cũ
+        var open = sessionRepository.findFirstByStudentIdAndLessonIdAndStatusOrderByStartedAtDesc(
+                student.getId(), lesson.getId(), SessionStatus.ACTIVE);
+        if (open.isPresent()) {
+            subscriptionService.requireActive(student);
+            return toView(open.get());
+        }
+        subscriptionService.checkAiSessionQuota(student);
 
         DiscussionSession session = DiscussionSession.builder()
                 .student(student)
