@@ -14,8 +14,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Lưu file lên ổ đĩa local (thư mục app.upload.dir), trả về URL dạng /uploads/xxx.
- * Khi tích hợp Cloudinary: thay phần ghi file bằng Cloudinary upload, trả về secure_url.
+ * Lưu file. Ảnh: lên Cloudflare R2 nếu đã cấu hình (URL https://...), chưa cấu hình thì lưu ổ đĩa local (/uploads/xxx).
+ * PDF tài liệu: vẫn lưu ổ đĩa local (thư mục app.upload.dir).
  */
 @Service
 public class FileStorageService {
@@ -23,13 +23,20 @@ public class FileStorageService {
     private static final Set<String> IMAGE_TYPES = Set.of("image/jpeg", "image/png", "image/webp", "image/heic");
 
     private final Path root;
+    private final R2Storage r2;
 
-    public FileStorageService(@Value("${app.upload.dir}") String uploadDir) throws IOException {
+    public FileStorageService(@Value("${app.upload.dir}") String uploadDir, R2Storage r2) throws IOException {
         this.root = Path.of(uploadDir).toAbsolutePath().normalize();
+        this.r2 = r2;
         Files.createDirectories(root);
     }
 
-    public StoredFile storeImage(MultipartFile file, String folder) {
+    /** Ảnh đã kiểm tra hợp lệ, đọc sẵn vào bộ nhớ (chưa lưu đi đâu) */
+    public record ImageData(byte[] bytes, String mimeType, String extension) {
+    }
+
+    /** Kiểm tra định dạng + đọc ảnh vào bộ nhớ. Chưa lưu: để AI kiểm tra trước, ảnh không hợp lệ thì khỏi tốn chỗ */
+    public ImageData readImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw ApiException.badRequest("Vui lòng chọn ảnh");
         }
@@ -42,15 +49,32 @@ public class FileStorageService {
             case "image/heic" -> ".heic";
             default -> ".jpg";
         };
-        String name = UUID.randomUUID() + ext;
+        try {
+            return new ImageData(file.getBytes(), file.getContentType(), ext);
+        } catch (IOException e) {
+            throw ApiException.badRequest("Không đọc được ảnh, thử chọn lại");
+        }
+    }
+
+    /**
+     * Lưu ảnh, trả về URL để ghi vào DB. Có R2: https://pub-xxx.r2.dev/folder/yyyy/MM/uuid.jpg.
+     * Chưa có R2: /uploads/folder/uuid.jpg trên ổ đĩa server (Render xoá ổ đĩa mỗi lần deploy).
+     */
+    public String saveImage(ImageData image, String folder) {
+        String name = UUID.randomUUID() + image.extension();
+        if (r2.enabled()) {
+            String month = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM"));
+            try {
+                return r2.put(folder + "/" + month + "/" + name, image.bytes(), image.mimeType());
+            } catch (RuntimeException e) {
+                throw new ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Không lưu được ảnh, thử lại sau");
+            }
+        }
         try {
             Path dir = root.resolve(folder).normalize();
             Files.createDirectories(dir);
-            Path target = dir.resolve(name);
-            try (InputStream in = file.getInputStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return new StoredFile("/uploads/" + folder + "/" + name, target);
+            Files.write(dir.resolve(name), image.bytes());
+            return "/uploads/" + folder + "/" + name;
         } catch (IOException e) {
             throw new ApiException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Không lưu được ảnh");
         }

@@ -1,20 +1,29 @@
 package com.mael.service.photo;
 
-import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Giải bài toán từ ảnh. Bản hiện tại là {@link MockPhotoSolver}.
- * Khi tích hợp OpenAI (gpt-6.1-sol, reasoning high): gửi ảnh + ghi chú, yêu cầu trả JSON
- * {extractedText, topicHint, steps[], finalAnswer}.
+ * Giải bài toán từ ảnh. Bản dùng thật là {@link GeminiPhotoSolver}; {@link MockPhotoSolver} chỉ dùng khi tắt AI (AI_PROVIDER=mock).
  */
 public interface PhotoSolver {
 
-    SolveResult solve(Path imagePath, String studentNote, int gradeLevel);
+    /**
+     * @param image     nội dung ảnh (chưa lưu ở đâu cả)
+     * @param mimeType  image/jpeg, image/png...
+     * @throws NotMathProblemException ảnh không phải bài tập Toán: không lưu ảnh, không tạo lời giải
+     */
+    SolveResult solve(byte[] image, String mimeType, String studentNote, int gradeLevel);
 
     /**
      * @param topicHint tên chủ đề gợi ý để map sang TOPIC (có thể null)
      */
     record SolveResult(String extractedText, String topicHint, List<String> steps, String finalAnswer, String modelName) {
+    }
+
+    /** Ảnh không phải đề Toán (ảnh người, đồ vật, meme, môn khác, ảnh mờ...) */
+    class NotMathProblemException extends RuntimeException {
+        public NotMathProblemException(String reason) {
+            super(reason);
+        }
     }
 }

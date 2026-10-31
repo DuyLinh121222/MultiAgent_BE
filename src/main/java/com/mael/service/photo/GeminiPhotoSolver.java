@@ -1,21 +1,24 @@
 package com.mael.service.photo;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.mael.exception.ApiException;
 import com.mael.service.ai.gemini.GeminiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Giải toán từ ảnh bằng Gemini (key GEMINI_KEY_PHOTO). Chưa bật Gemini hoặc gọi lỗi thì dùng lời giải mẫu.
+ * Giải toán từ ảnh bằng Gemini (key GEMINI_KEY_PHOTO). DeepSeek không đọc được ảnh nên tác vụ này luôn dùng Gemini.
+ *
+ * Gemini phải trả lời 2 việc trong 1 lần gọi: (1) ảnh có phải đề bài Toán không, (2) nếu có thì giải.
+ * Ảnh không phải Toán → ném {@link NotMathProblemException}, không lưu ảnh, không tạo lời giải.
+ * AI lỗi / hết lượt → báo "thử lại sau", KHÔNG trả lời giải mẫu (trước đây lời giải mẫu hiện ra với mọi ảnh).
  */
 @Slf4j
 @Service
@@ -24,46 +27,61 @@ import java.util.Optional;
 public class GeminiPhotoSolver implements PhotoSolver {
 
     private static final String SYSTEM = """
-            Bạn là giáo viên Toán THCS Việt Nam. Đọc đề toán trong ảnh và giải theo chương trình GDPT 2018.
+            Bạn là giáo viên Toán THCS Việt Nam, kiểm duyệt ảnh học sinh gửi lên rồi mới giải.
+
+            BƯỚC 1 - KIỂM TRA ẢNH. isMathProblem = true CHỈ KHI ảnh chụp/scan một đề bài Toán đọc được:
+            phép tính, biểu thức, phương trình, bất phương trình, hệ phương trình, hàm số, đồ thị, hình học có số liệu,
+            bài toán có lời văn, bài thống kê - xác suất.
+            isMathProblem = false nếu ảnh là: người, mặt, thú cưng, đồ vật, phong cảnh, đồ ăn, meme, ảnh chụp màn hình game / mạng xã hội,
+            bài môn khác (Văn, Anh, Lý, Hoá, Sinh, Sử, Địa...), giấy trắng, chữ viết không phải đề toán, ảnh quá mờ / tối / bị che không đọc được đề.
+            Ghi chú của học sinh KHÔNG thay thế được ảnh: ảnh không có đề toán thì vẫn là false, kể cả khi ghi chú có đề.
+            Tuyệt đối không tự bịa ra đề bài không có trong ảnh.
+
+            BƯỚC 2 - nếu isMathProblem = true thì giải theo chương trình GDPT 2018.
+
             Trả về JSON đúng mẫu:
-            {"extractedText":"đề bài chép lại","topicHint":"tên chủ đề ngắn, ví dụ Căn bậc hai",
+            {"isMathProblem":true,"rejectReason":"",
+             "extractedText":"đề bài chép lại từ ảnh","topicHint":"tên chủ đề ngắn, ví dụ Căn bậc hai",
              "steps":["Bước 1: ...","Bước 2: ..."],"finalAnswer":"đáp số ngắn gọn"}
-            Quy tắc: mỗi bước 1-2 câu, dùng kí hiệu √ ² ³ ≤ ≥ ≠ thay vì LaTeX, tối đa 8 bước.
-            Bước cuối là bước "Thử lại" kiểm tra đáp số. Nếu ảnh không phải bài toán thì extractedText = "" và steps = [].
+            Khi isMathProblem = false: rejectReason là 1 câu ngắn, thân thiện, xưng "bạn", nói ảnh đang chụp gì
+            (VD "Ảnh này là một chú mèo, chưa thấy đề toán nào"), extractedText = "", steps = [], finalAnswer = "".
+            Quy tắc lời giải: mỗi bước 1-2 câu, dùng kí hiệu √ ² ³ ≤ ≥ ≠ thay vì LaTeX, tối đa 8 bước.
+            Bước cuối là bước "Thử lại" kiểm tra đáp số.
             """;
+
+    private static final String DEFAULT_REJECT =
+            "Ảnh này chưa phải đề bài Toán. Bạn chụp rõ đề bài Toán (thấy đủ chữ và số) rồi gửi lại nhé!";
 
     private final GeminiClient gemini;
     private final MockPhotoSolver fallback;
 
     @Override
-    public SolveResult solve(Path imagePath, String studentNote, int gradeLevel) {
+    public SolveResult solve(byte[] image, String mimeType, String studentNote, int gradeLevel) {
         if (!gemini.enabled(GeminiClient.Task.PHOTO)) {
-            return fallback.solve(imagePath, studentNote, gradeLevel);
+            // Chỉ khi tắt hẳn AI (chạy demo không có key)
+            return fallback.solve(image, mimeType, studentNote, gradeLevel);
         }
-        try {
-            byte[] bytes = Files.readAllBytes(imagePath);
-            String name = imagePath.getFileName().toString().toLowerCase(Locale.ROOT);
-            String mime = name.endsWith(".png") ? "image/png" : name.endsWith(".webp") ? "image/webp"
-                    : name.endsWith(".heic") ? "image/heic" : "image/jpeg";
-            String prompt = "Học sinh lớp " + gradeLevel + " gửi ảnh bài toán."
-                    + (studentNote != null && !studentNote.isBlank() ? " Ghi chú của học sinh: " + studentNote : "");
-            Optional<JsonNode> json = gemini.generateJson(GeminiClient.Task.PHOTO, SYSTEM,
-                    List.of(GeminiClient.Part.file(mime, bytes), GeminiClient.Part.text(prompt)), 0.2, 1500);
-            if (json.isPresent()) {
-                JsonNode j = json.get();
-                List<String> steps = new ArrayList<>();
-                j.path("steps").forEach(s -> steps.add(s.asText()));
-                if (!steps.isEmpty()) {
-                    return new SolveResult(j.path("extractedText").asText(studentNote),
-                            j.path("topicHint").asText(null), steps, j.path("finalAnswer").asText(""), gemini.modelName());
-                }
-                throw new IllegalStateException("Không đọc được bài toán trong ảnh");
-            }
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("Gemini giải ảnh lỗi: {}", e.getMessage());
+        String prompt = "Học sinh lớp " + gradeLevel + " gửi ảnh bài toán."
+                + (studentNote != null && !studentNote.isBlank() ? " Ghi chú của học sinh: " + studentNote.trim() : "");
+        Optional<JsonNode> json = gemini.generateJson(GeminiClient.Task.PHOTO, SYSTEM,
+                List.of(GeminiClient.Part.file(mimeType, image), GeminiClient.Part.text(prompt)), 0.1, 2000);
+        if (json.isEmpty()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI giải bài đang bận, bạn thử lại sau ít phút nhé");
         }
-        return fallback.solve(imagePath, studentNote, gradeLevel);
+        JsonNode j = json.get();
+        String extracted = j.path("extractedText").asText("").trim();
+        List<String> steps = new ArrayList<>();
+        j.path("steps").forEach(s -> {
+            String t = s.asText("").trim();
+            if (!t.isEmpty()) steps.add(t);
+        });
+        // Chặn 2 lớp: AI nói không phải toán, HOẶC không chép được đề / không có bước giải
+        if (!j.path("isMathProblem").asBoolean(false) || extracted.isEmpty() || steps.isEmpty()) {
+            String reason = j.path("rejectReason").asText("").trim();
+            log.info("Từ chối ảnh không phải bài toán: {}", reason);
+            throw new NotMathProblemException(reason.isEmpty() ? DEFAULT_REJECT : reason);
+        }
+        return new SolveResult(extracted, j.path("topicHint").asText(null), steps,
+                j.path("finalAnswer").asText(""), gemini.modelName(GeminiClient.Task.PHOTO));
     }
 }

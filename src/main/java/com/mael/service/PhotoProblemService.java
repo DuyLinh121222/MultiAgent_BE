@@ -18,13 +18,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Giải toán bằng ảnh: học sinh chụp/tải ảnh bài toán, AI đọc đề và giải từng bước.
+ * Giải toán bằng ảnh: học sinh chụp/tải ảnh bài toán, AI đọc đề và giải từng bước. Ảnh lưu trên Cloudflare R2.
  */
 @Slf4j
 @Service
@@ -40,24 +41,37 @@ public class PhotoProblemService {
     private final SubscriptionService subscriptionService;
     private final AchievementService achievementService;
     private final CurrentUser currentUser;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    /**
+     * 1. Kiểm tra định dạng ảnh, đọc vào bộ nhớ (chưa lưu).
+     * 2. Gemini kiểm tra có phải đề Toán không + giải. Không phải Toán → báo lỗi 400, KHÔNG lưu ảnh, KHÔNG ghi DB.
+     * 3. Là bài Toán → upload ảnh lên Cloudflare R2, DB chỉ lưu URL ảnh + lời giải.
+     * Không bọc @Transactional cả hàm: gọi AI mất vài giây, không giữ kết nối DB trong lúc chờ.
+     */
     public PhotoProblemView upload(MultipartFile image, String note) {
         Student student = currentUser.student();
         subscriptionService.requireActive(student);
 
-        FileStorageService.StoredFile stored = fileStorageService.storeImage(image, "photo-problems");
-        PhotoProblem problem = photoProblemRepository.save(PhotoProblem.builder()
-                .student(student)
-                .imageUrl(stored.url())
-                .extractedText(note)
-                .status(PhotoStatus.PENDING)
-                .build());
-
+        FileStorageService.ImageData img = fileStorageService.readImage(image);
+        PhotoSolver.SolveResult result;
         try {
-            PhotoSolver.SolveResult result = photoSolver.solve(stored.path(), note, student.getGradeLevel());
-            problem.setExtractedText(result.extractedText());
-            problem.setTopic(matchTopic(result.topicHint(), student.getGradeLevel()));
+            result = photoSolver.solve(img.bytes(), img.mimeType(), note, student.getGradeLevel());
+        } catch (PhotoSolver.NotMathProblemException e) {
+            throw ApiException.badRequest(e.getMessage());
+        }
+
+        String imageUrl = fileStorageService.saveImage(img, "photo-problems");
+        Topic topic = matchTopic(result.topicHint(), student.getGradeLevel());
+
+        return transactionTemplate.execute(status -> {
+            PhotoProblem problem = photoProblemRepository.save(PhotoProblem.builder()
+                    .student(student)
+                    .topic(topic)
+                    .imageUrl(imageUrl)
+                    .extractedText(result.extractedText())
+                    .status(PhotoStatus.SOLVED)
+                    .build());
             Solution solution = solutionRepository.save(Solution.builder()
                     .photoProblem(problem)
                     .finalAnswer(result.finalAnswer())
@@ -65,13 +79,9 @@ public class PhotoProblemService {
                     .generatedBy(result.modelName())
                     .build());
             problem.setSolution(solution);
-            problem.setStatus(PhotoStatus.SOLVED);
-        } catch (Exception e) {
-            log.warn("Giải ảnh thất bại: {}", e.getMessage());
-            problem.setStatus(PhotoStatus.FAILED);
-        }
-        achievementService.award(student, AchievementService.PHOTO_SOLVER);
-        return DtoMapper.toPhotoView(problem);
+            achievementService.award(student, AchievementService.PHOTO_SOLVER);
+            return DtoMapper.toPhotoView(problem);
+        });
     }
 
     @Transactional(readOnly = true)

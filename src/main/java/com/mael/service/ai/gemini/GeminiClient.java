@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mael.service.ai.motapi.MotApiClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -13,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Gọi Gemini API (generateContent). Mỗi tác vụ dùng 1 API key riêng để chia tải:
@@ -27,6 +29,9 @@ import java.util.*;
  * Key của tác vụ bị hết lượt (429) hoặc lỗi máy chủ thì thử lần lượt các key còn lại.
  * Model mặc định là bản Flash-Lite (rẻ, nhanh); model chính không tồn tại (404) thì dùng model dự phòng.
  * Không có key nào hoặc AI_PROVIDER khác gemini: {@link #enabled(Task)} = false, hệ thống dùng kịch bản soạn sẵn.
+ *
+ * AI_PROVIDER=gemini,motapis: tác vụ thuần chữ (mặc định DISCUSSION, ANALYSIS) gọi DeepSeek qua {@link MotApiClient} trước,
+ * DeepSeek lỗi thì gọi Gemini. Tác vụ có ảnh / PDF luôn gọi Gemini.
  */
 @Slf4j
 @Component
@@ -51,6 +56,7 @@ public class GeminiClient {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final Map<Task, String> keys = new EnumMap<>(Task.class);
+    private final MotApiClient motApi;
 
     public GeminiClient(
             @Value("${app.ai.provider:mock}") String provider,
@@ -62,8 +68,10 @@ public class GeminiClient {
             @Value("${app.gemini.keys.analysis:}") String keyAnalysis,
             @Value("${app.gemini.keys.document:}") String keyDocument,
             @Value("${app.gemini.keys.photo:}") String keyPhoto,
-            ObjectMapper objectMapper) {
-        this.providerOn = "gemini".equalsIgnoreCase(provider.trim());
+            ObjectMapper objectMapper,
+            MotApiClient motApi) {
+        this.providerOn = provider.toLowerCase(Locale.ROOT).contains("gemini");
+        this.motApi = motApi;
         this.model = model.trim();
         this.fallbackModel = fallbackModel.trim();
         this.objectMapper = objectMapper;
@@ -81,13 +89,22 @@ public class GeminiClient {
         }
     }
 
-    /** Có gọi được Gemini cho tác vụ này không (AI_PROVIDER=gemini và có ít nhất 1 key) */
+    /** Có gọi được AI cho tác vụ này không (Gemini có key, hoặc DeepSeek nhận tác vụ này) */
     public boolean enabled(Task task) {
+        return geminiEnabled(task) || motApi.handles(task);
+    }
+
+    private boolean geminiEnabled(Task task) {
         return providerOn && !candidateKeys(task).isEmpty();
     }
 
     public String modelName() {
         return model;
+    }
+
+    /** Tên model sẽ trả lời tác vụ này (để lưu vào generatedBy) */
+    public String modelName(Task task) {
+        return motApi.handles(task) ? motApi.modelName() : model;
     }
 
     /**
@@ -114,6 +131,14 @@ public class GeminiClient {
     private Optional<String> generate(Task task, String systemPrompt, List<Part> parts, double temperature,
                                       int maxTokens, boolean json) {
         if (!enabled(task)) return Optional.empty();
+        boolean hasFile = parts.stream().anyMatch(p -> p.base64Data() != null);
+        if (!hasFile && motApi.handles(task)) {
+            String userText = parts.stream().map(Part::text).filter(Objects::nonNull).collect(Collectors.joining("\n\n"));
+            Optional<String> deepseek = motApi.chat(task, systemPrompt, userText, temperature, maxTokens, json);
+            if (deepseek.isPresent()) return deepseek;
+            log.info("DeepSeek {} không trả lời được, chuyển sang Gemini", task);
+        }
+        if (!geminiEnabled(task)) return Optional.empty();
         byte[] body;
         try {
             // Gửi dạng byte có Content-Length rõ ràng (không dùng chunked)

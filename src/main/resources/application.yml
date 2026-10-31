@@ -69,7 +69,15 @@ app:
     login-max-fail: ${LOGIN_MAX_FAIL:8}
   ai:
     # gemini = gọi Gemini API bằng 4 key bên dưới. mock = chỉ dùng kịch bản soạn sẵn (không gọi AI)
+    # gemini,motapis = thêm DeepSeek (MotAPI) cho tác vụ thuần chữ, ảnh / PDF vẫn dùng Gemini
     provider: ${AI_PROVIDER:mock}
+  motapis:
+    base-url: ${MOTAPIS_BASE_URL:https://motapis.com/v1}
+    api-key: ${MOTAPIS_API_KEY:}
+    model: ${MOTAPIS_MODEL:deepseek-v4-flash}
+    # Tác vụ giao cho DeepSeek (chỉ discussion, analysis; photo / document luôn là Gemini vì cần đọc ảnh, PDF)
+    tasks: ${MOTAPIS_TASKS:discussion,analysis}
+    timeout-seconds: ${MOTAPIS_TIMEOUT_SECONDS:60}
   gemini:
     base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
     # Model rẻ, nhanh. Model chính không có (404) thì tự dùng model dự phòng
@@ -104,6 +112,14 @@ app:
     secret-key: ${MOMO_SECRET_KEY:}
     redirect-url: ${MOMO_REDIRECT_URL:http://localhost:5173/checkout/result}
     ipn-url: ${MOMO_IPN_URL:}
+  r2:
+    # Cloudflare R2 lưu ảnh học sinh chụp giải bài. Để trống = lưu ổ đĩa server (thư mục uploads)
+    account-id: ${R2_ACCOUNT_ID:}
+    access-key-id: ${R2_ACCESS_KEY_ID:}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+    bucket: ${R2_BUCKET:}
+    # https://pub-xxxx.r2.dev hoặc domain riêng gắn vào bucket
+    public-url: ${R2_PUBLIC_URL:}
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
