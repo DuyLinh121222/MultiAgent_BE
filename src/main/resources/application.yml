@@ -83,6 +83,8 @@ app:
     # Model rẻ, nhanh. Model chính không có (404) thì tự dùng model dự phòng
     model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
     fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-2.5-flash-lite}
+    # Giải toán từ ảnh cần đọc chính xác phân số, chữ nhỏ: dùng bản Flash (không lite). Không có thì tự lùi về model chung
+    photo-model: ${GEMINI_PHOTO_MODEL:gemini-3-flash-preview}
     timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}
     # Mỗi tác vụ 1 key riêng. Key nào hết lượt (429) thì tự thử key còn lại
     keys:

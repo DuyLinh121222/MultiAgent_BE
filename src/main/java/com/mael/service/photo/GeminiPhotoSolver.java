@@ -37,7 +37,15 @@ public class GeminiPhotoSolver implements PhotoSolver {
             Ghi chú của học sinh KHÔNG thay thế được ảnh: ảnh không có đề toán thì vẫn là false, kể cả khi ghi chú có đề.
             Tuyệt đối không tự bịa ra đề bài không có trong ảnh.
 
-            BƯỚC 2 - nếu isMathProblem = true thì giải theo chương trình GDPT 2018.
+            BƯỚC 2 - CHÉP ĐỀ THẬT CẨN THẬN (lỗi hay gặp nhất là đọc sai đề rồi giải sai theo):
+            - Đọc từng kí tự. Phân biệt chữ x, y với số: "y" dễ bị nhầm thành "1" hoặc "4", "x" dễ nhầm thành "×".
+            - Phân số nhỏ: đọc rõ tử và mẫu. Tử số của phân số thường là ẩn (y/3, x/2), không phải số 1.
+            - Kiểm tra lại đề vừa chép: hệ phương trình hai ẩn thì mỗi phương trình phải có ít nhất một ẩn x hoặc y;
+              nếu chép ra một phương trình chỉ có số, hoặc có 1 ẩn trong khi các phương trình khác có 2 ẩn,
+              thì gần như chắc chắn đã đọc nhầm một ẩn thành số: nhìn lại ảnh và sửa đề.
+            - Dấu âm, dấu trừ, dấu bằng, dấu ngoặc phải giữ đúng như ảnh.
+
+            BƯỚC 3 - giải theo chương trình GDPT 2018, dựa đúng đề đã chép ở BƯỚC 2.
 
             Trả về JSON đúng mẫu:
             {"isMathProblem":true,"rejectReason":"",
@@ -46,7 +54,8 @@ public class GeminiPhotoSolver implements PhotoSolver {
             Khi isMathProblem = false: rejectReason là 1 câu ngắn, thân thiện, xưng "bạn", nói ảnh đang chụp gì
             (VD "Ảnh này là một chú mèo, chưa thấy đề toán nào"), extractedText = "", steps = [], finalAnswer = "".
             Quy tắc lời giải: mỗi bước 1-2 câu, dùng kí hiệu √ ² ³ ≤ ≥ ≠ thay vì LaTeX, tối đa 8 bước.
-            Bước cuối là bước "Thử lại" kiểm tra đáp số.
+            Bước cuối là bước "Thử lại": thay đáp số vào ĐỀ ĐÃ CHÉP (extractedText), tính lại từng vế.
+            Bài "kiểm tra cặp số có là nghiệm không": tính riêng từng phương trình, ghi rõ đúng / sai rồi mới kết luận.
             """;
 
     private static final String DEFAULT_REJECT =
@@ -64,7 +73,7 @@ public class GeminiPhotoSolver implements PhotoSolver {
         String prompt = "Học sinh lớp " + gradeLevel + " gửi ảnh bài toán."
                 + (studentNote != null && !studentNote.isBlank() ? " Ghi chú của học sinh: " + studentNote.trim() : "");
         Optional<JsonNode> json = gemini.generateJson(GeminiClient.Task.PHOTO, SYSTEM,
-                List.of(GeminiClient.Part.file(mimeType, image), GeminiClient.Part.text(prompt)), 0.1, 2000);
+                List.of(GeminiClient.Part.file(mimeType, image), GeminiClient.Part.text(prompt)), 0.1, 8192);
         if (json.isEmpty()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI giải bài đang bận, bạn thử lại sau ít phút nhé");
         }

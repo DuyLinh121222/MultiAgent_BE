@@ -53,6 +53,10 @@ public class GeminiClient {
     private final boolean providerOn;
     private final String model;
     private final String fallbackModel;
+    /** Model riêng cho giải ảnh (đọc chữ nhỏ, phân số chính xác hơn bản lite). Trống = dùng model chung */
+    private final String photoModel;
+    /** Model thực sự đã trả lời ở lần gọi gần nhất trên luồng này (để lưu generatedBy cho đúng) */
+    private final ThreadLocal<String> lastModel = new ThreadLocal<>();
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final Map<Task, String> keys = new EnumMap<>(Task.class);
@@ -63,6 +67,7 @@ public class GeminiClient {
             @Value("${app.gemini.base-url:https://generativelanguage.googleapis.com}") String baseUrl,
             @Value("${app.gemini.model:gemini-3.1-flash-lite}") String model,
             @Value("${app.gemini.fallback-model:gemini-2.5-flash-lite}") String fallbackModel,
+            @Value("${app.gemini.photo-model:gemini-3-flash-preview}") String photoModel,
             @Value("${app.gemini.timeout-seconds:60}") int timeoutSeconds,
             @Value("${app.gemini.keys.discussion:}") String keyDiscussion,
             @Value("${app.gemini.keys.analysis:}") String keyAnalysis,
@@ -74,6 +79,7 @@ public class GeminiClient {
         this.motApi = motApi;
         this.model = model.trim();
         this.fallbackModel = fallbackModel.trim();
+        this.photoModel = photoModel.trim();
         this.objectMapper = objectMapper;
         keys.put(Task.DISCUSSION, keyDiscussion.trim());
         keys.put(Task.ANALYSIS, keyAnalysis.trim());
@@ -85,7 +91,8 @@ public class GeminiClient {
         this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
         if (providerOn) {
             long count = keys.values().stream().filter(k -> !k.isBlank()).count();
-            log.info("Gemini bật: model {} (dự phòng {}), {} / 4 key được cấu hình", this.model, this.fallbackModel, count);
+            log.info("Gemini bật: model {} (dự phòng {}), giải ảnh dùng {}, {} / 4 key được cấu hình",
+                    this.model, this.fallbackModel, this.photoModel.isBlank() ? this.model : this.photoModel, count);
         }
     }
 
@@ -102,9 +109,12 @@ public class GeminiClient {
         return model;
     }
 
-    /** Tên model sẽ trả lời tác vụ này (để lưu vào generatedBy) */
+    /** Tên model đã trả lời lần gọi gần nhất của luồng hiện tại (để lưu vào generatedBy) */
     public String modelName(Task task) {
-        return motApi.handles(task) ? motApi.modelName() : model;
+        String used = lastModel.get();
+        if (used != null) return used;
+        if (motApi.handles(task)) return motApi.modelName();
+        return task == Task.PHOTO && !photoModel.isBlank() ? photoModel : model;
     }
 
     /**
@@ -130,12 +140,16 @@ public class GeminiClient {
 
     private Optional<String> generate(Task task, String systemPrompt, List<Part> parts, double temperature,
                                       int maxTokens, boolean json) {
+        lastModel.remove();
         if (!enabled(task)) return Optional.empty();
         boolean hasFile = parts.stream().anyMatch(p -> p.base64Data() != null);
         if (!hasFile && motApi.handles(task)) {
             String userText = parts.stream().map(Part::text).filter(Objects::nonNull).collect(Collectors.joining("\n\n"));
             Optional<String> deepseek = motApi.chat(task, systemPrompt, userText, temperature, maxTokens, json);
-            if (deepseek.isPresent()) return deepseek;
+            if (deepseek.isPresent()) {
+                lastModel.set(motApi.modelName());
+                return deepseek;
+            }
             log.info("DeepSeek {} không trả lời được, chuyển sang Gemini", task);
         }
         if (!geminiEnabled(task)) return Optional.empty();
@@ -147,7 +161,7 @@ public class GeminiClient {
             return Optional.empty();
         }
         for (String key : candidateKeys(task)) {
-            for (String m : models()) {
+            for (String m : models(task)) {
                 try {
                     JsonNode res = restClient.post()
                             .uri("/v1beta/models/{model}:generateContent", m)
@@ -158,13 +172,18 @@ public class GeminiClient {
                             .retrieve()
                             .body(JsonNode.class);
                     String text = extractText(res);
-                    if (text != null && !text.isBlank()) return Optional.of(text.trim());
+                    if (text != null && !text.isBlank()) {
+                        lastModel.set(m);
+                        return Optional.of(text.trim());
+                    }
                     log.warn("Gemini {} trả về rỗng (model {}): {}", task, m, abbreviate(String.valueOf(res)));
                     break;
                 } catch (RestClientResponseException e) {
                     int status = e.getStatusCode().value();
                     log.warn("Gemini {} lỗi {} với model {}: {}", task, status, m, abbreviate(e.getResponseBodyAsString()));
                     if (status == 404) continue;          // model không có: thử model dự phòng
+                    // Model giải ảnh hết lượt miễn phí: lùi về model chung trên cùng key, không báo lỗi cho học sinh
+                    if (status == 429 && task == Task.PHOTO && m.equals(photoModel)) continue;
                     break;                               // 429 / 401 / 5xx: đổi sang key khác
                 } catch (Exception e) {
                     log.warn("Gemini {} không gọi được: {}", task, e.getMessage());
@@ -223,8 +242,13 @@ public class GeminiClient {
         return new ArrayList<>(list);
     }
 
-    private List<String> models() {
-        return fallbackModel.isBlank() || fallbackModel.equals(model) ? List.of(model) : List.of(model, fallbackModel);
+    /** Thứ tự model thử: giải ảnh dùng model riêng trước; model không tồn tại (404) thì thử model kế tiếp */
+    private List<String> models(Task task) {
+        LinkedHashSet<String> list = new LinkedHashSet<>();
+        if (task == Task.PHOTO && !photoModel.isBlank()) list.add(photoModel);
+        list.add(model);
+        if (!fallbackModel.isBlank()) list.add(fallbackModel);
+        return new ArrayList<>(list);
     }
 
     private static String stripFence(String text) {
